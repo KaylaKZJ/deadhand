@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="BodyCardResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_logic/body_card.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+card_name = "Zombie"
+card_type = "body"
+description = "Tough rotting corpse. High HP but only 1 armor slot."
+hp = 3
+attack = 2
+equipment_slots = 1
+slot_types = Array[String](["armor"])

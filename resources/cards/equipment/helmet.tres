@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EquipmentCardResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_logic/equipment_card.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+card_name = "Helmet"
+card_type = "equipment"
+description = "Iron helmet for protection. +2 HP"
+equipment_type = "armor"
+hp_bonus = 2
+attack_bonus = 0

@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EquipmentCardResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_logic/equipment_card.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+card_name = "Iron Sword"
+card_type = "equipment"
+description = "Well-crafted blade. +3 ATK"
+equipment_type = "weapon"
+hp_bonus = 0
+attack_bonus = 3
