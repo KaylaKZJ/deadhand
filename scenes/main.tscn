@@ -1,0 +1,139 @@
+[gd_scene load_steps=6 format=3 uid="uid://main_scene"]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/managers/deck_manager.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/managers/combat_manager.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/managers/enemy_ai.gd" id="4"]
+[ext_resource type="PackedScene" uid="uid://lane_scene_123" path="res://scenes/lane.tscn" id="5"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1")
+
+[node name="DeckManager" type="Node" parent="."]
+script = ExtResource("2")
+
+[node name="CombatManager" type="Node" parent="."]
+script = ExtResource("3")
+
+[node name="EnemyAI" type="Node" parent="."]
+script = ExtResource("4")
+
+[node name="Board" type="Node2D" parent="."]
+position = Vector2(800, 360)
+
+[node name="Lane1" parent="Board" instance=ExtResource("5")]
+position = Vector2(0, -160)
+
+[node name="Lane2" parent="Board" instance=ExtResource("5")]
+position = Vector2(0, -80)
+
+[node name="Lane3" parent="Board" instance=ExtResource("5")]
+
+[node name="Lane4" parent="Board" instance=ExtResource("5")]
+position = Vector2(0, 80)
+
+[node name="Lane5" parent="Board" instance=ExtResource("5")]
+position = Vector2(0, 160)
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="TurnLabel" type="Label" parent="UI"]
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 200.0
+offset_bottom = 50.0
+text = "Turn: 0"
+theme_override_font_sizes/font_size = 24
+
+[node name="PhaseLabel" type="Label" parent="UI"]
+offset_left = 20.0
+offset_top = 60.0
+offset_right = 200.0
+offset_bottom = 90.0
+text = "Phase: DRAW"
+theme_override_font_sizes/font_size = 20
+
+[node name="PlayerHPLabel" type="Label" parent="UI"]
+offset_left = 20.0
+offset_top = 100.0
+offset_right = 200.0
+offset_bottom = 140.0
+text = "HP: 20/20"
+theme_override_font_sizes/font_size = 28
+
+[node name="EnemyDeckLabel" type="Label" parent="UI"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -280.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 100.0
+grow_horizontal = 0
+text = "Enemies Remaining: 20
+(On Board: 0)"
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 2
+
+[node name="EnemyHPLabel" type="Label" parent="UI"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -280.0
+offset_top = 110.0
+offset_right = -20.0
+offset_bottom = 150.0
+grow_horizontal = 0
+text = "Enemy HP: 20/20"
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 2
+
+[node name="HandContainer" type="HBoxContainer" parent="UI"]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -300.0
+offset_top = -200.0
+offset_right = 300.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+alignment = 1
+
+[node name="DrawButtons" type="HBoxContainer" parent="UI"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+offset_top = 20.0
+offset_right = 200.0
+offset_bottom = 80.0
+grow_horizontal = 2
+
+[node name="BodyPileButton" type="Button" parent="UI/DrawButtons"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Draw from BODY Pile"
+
+[node name="EquipmentPileButton" type="Button" parent="UI/DrawButtons"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Draw from EQUIPMENT Pile"
+
+[node name="EndTurnButton" type="Button" parent="UI"]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -200.0
+offset_top = -80.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 0
+disabled = true
+text = "END TURN"
+theme_override_font_sizes/font_size = 20
