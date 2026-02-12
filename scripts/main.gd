@@ -22,6 +22,9 @@ extends Node2D
 @onready var player_hp_label: Label = $UI/PlayerHPLabel
 @onready var enemy_deck_label: Label = $UI/EnemyDeckLabel
 @onready var enemy_hp_label: Label = $UI/EnemyHPLabel
+@onready var game_over_panel: Panel = $UI/GameOverPanel
+@onready var game_over_label: Label = $UI/GameOverPanel/VBoxContainer/GameOverLabel
+@onready var restart_button: Button = $UI/GameOverPanel/VBoxContainer/RestartButton
 
 var lanes: Array[Lane] = []
 var card_displays: Array[CardDisplay] = []
@@ -40,16 +43,24 @@ func _ready():
 	enemy_ai.initialize(deck_manager)
 	combat_manager.initialize(deck_manager, lanes, enemy_ai)
 	
+	# Hide draw buttons since we auto-draw now
+	body_pile_button.visible = false
+	equipment_pile_button.visible = false
+	
 	# Connect signals
 	body_pile_button.pressed.connect(_on_body_pile_pressed)
 	equipment_pile_button.pressed.connect(_on_equipment_pile_pressed)
 	end_turn_button.pressed.connect(_on_end_turn_pressed)
+	restart_button.pressed.connect(_on_restart_pressed)
 	
 	deck_manager.hand_updated.connect(_on_hand_updated)
 	combat_manager.turn_started.connect(_on_turn_started)
 	combat_manager.phase_changed.connect(_on_phase_changed)
 	combat_manager.game_won.connect(_on_game_won)
 	combat_manager.game_lost.connect(_on_game_lost)
+	
+	# Hide game over panel initially
+	game_over_panel.visible = false
 	
 	# Start the game
 	combat_manager.start_game()
@@ -92,7 +103,7 @@ func _process(_delta):
 				
 				# Set new highlight
 				highlighted_lane = target_lane
-				if highlighted_lane and highlighted_lane.player_drop_zone and not highlighted_lane.player_unit:
+				if highlighted_lane and highlighted_lane.player_drop_zone and not highlighted_lane.column_0_unit:
 					highlighted_lane._on_drop_zone_hover()
 	else:
 		# Clear all highlights when not dragging
@@ -115,6 +126,10 @@ func _on_equipment_pile_pressed():
 func _on_end_turn_pressed():
 	"""Player ends their turn"""
 	combat_manager.end_turn()
+
+func _on_restart_pressed():
+	"""Restart the game"""
+	get_tree().reload_current_scene()
 
 func _on_hand_updated(hand: Array[CardBase]):
 	"""Update hand display when cards change"""
@@ -170,7 +185,7 @@ func _on_card_played(card_display: CardDisplay):
 	elif card is EquipmentCardResource:
 		# For equipment, try to find any player unit in the target lane
 		# If lane has a player unit, automatically target it
-		var target_unit = target_lane.player_unit if target_lane else null
+		var target_unit = target_lane.column_0_unit if target_lane else null
 		
 		# If no unit in the exact lane, check nearby lanes for easier targeting
 		if not target_unit:
@@ -199,21 +214,21 @@ func _find_closest_player_unit(pos: Vector2) -> Unit:
 	var closest_distance: float = 200.0  # Max search radius
 	
 	for lane in lanes:
-		if lane.player_unit:
-			var distance = pos.distance_to(lane.player_unit.global_position)
+		if lane.column_0_unit:
+			var distance = pos.distance_to(lane.column_0_unit.global_position)
 			if distance < closest_distance:
 				closest_distance = distance
-				closest_unit = lane.player_unit
+				closest_unit = lane.column_0_unit
 	
 	return closest_unit
 
 func _get_unit_at_position(pos: Vector2, lane: Lane) -> Unit:
 	"""Find unit at position in a lane"""
-	if lane.player_unit:
-		var unit_pos = lane.player_unit.global_position
+	if lane.column_0_unit:
+		var unit_pos = lane.column_0_unit.global_position
 		# Increased detection radius from 60 to 150 for easier targeting
 		if pos.distance_to(unit_pos) < 150:
-			return lane.player_unit
+			return lane.column_0_unit
 	return null
 
 func _on_turn_started(turn: int):
@@ -229,30 +244,33 @@ func _on_phase_changed(phase: String):
 	_update_enemy_hp_display()
 	_update_enemy_deck_display()
 	
-	# Enable/disable buttons based on phase
+	# Enable/disable buttons based on phase (draw buttons always disabled now)
 	match phase:
-		"DRAW":
-			body_pile_button.disabled = false
-			equipment_pile_button.disabled = false
-			end_turn_button.disabled = true
 		"PLAY":
-			body_pile_button.disabled = true
-			equipment_pile_button.disabled = true
 			end_turn_button.disabled = false
 		_:
-			body_pile_button.disabled = true
-			equipment_pile_button.disabled = true
 			end_turn_button.disabled = true
 
 func _on_game_won():
 	"""Player won!"""
 	print("Game won!")
-	# TODO: Show win screen
+	_show_game_over("VICTORY!", Color.GREEN)
 
 func _on_game_lost():
 	"""Player lost!"""
 	print("Game lost!")
-	# TODO: Show loss screen
+	_show_game_over("DEFEAT!", Color.RED)
+
+func _show_game_over(message: String, color: Color):
+	"""Show the game over screen with restart button"""
+	game_over_label.text = message
+	game_over_label.add_theme_color_override("font_color", color)
+	game_over_panel.visible = true
+	
+	# Disable game controls
+	body_pile_button.disabled = true
+	equipment_pile_button.disabled = true
+	end_turn_button.disabled = true
 
 func _update_hp_display():
 	"""Update the player HP label"""
