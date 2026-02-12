@@ -4,19 +4,19 @@ class_name EnemyAI
 
 var deck_manager: DeckManager
 const MAX_ENEMIES_ON_BOARD: int = 5  # Maximum enemies allowed on board at once
-const MAX_SPAWNS_PER_TURN: int = 1 # Maximum new enemies spawned per turn
+const MAX_SPAWNS_PER_TURN: int = 2 # Maximum new enemies spawned per turn
 
 func initialize(deck_mgr: DeckManager):
 	"""Set up enemy AI with deck manager reference"""
 	deck_manager = deck_mgr
 
 func spawn_enemies(lanes: Array[Lane]):
-	"""Spawn enemies to empty lanes (up to max)"""
+	"""Spawn enemies to column 2 (spawn position) in empty lanes"""
 	if not deck_manager:
 		print("ERROR: EnemyAI not initialized with DeckManager!")
 		return
 	
-	# Count current enemies
+	# Count current enemies (check both column 1 and column 2)
 	var enemy_count = 0
 	for lane in lanes:
 		if lane.has_enemy_unit():
@@ -34,19 +34,19 @@ func spawn_enemies(lanes: Array[Lane]):
 	print("Board space available: %d" % board_space_available)
 	print("Can spawn up to: %d enemies (per-turn limit)" % spawn_slots_available)
 	
-	# Get all empty lanes and shuffle them for random placement
-	var empty_lanes: Array[Lane] = []
+	# Get all lanes where column 2 is empty (can spawn)
+	var available_lanes: Array[Lane] = []
 	for lane in lanes:
-		if not lane.has_enemy_unit():
-			empty_lanes.append(lane)
+		if lane.get_enemy_in_column(2) == null:  # Column 2 must be empty
+			available_lanes.append(lane)
 	
-	# Shuffle the empty lanes for random spawn order
-	empty_lanes.shuffle()
+	# Shuffle the available lanes for random placement
+	available_lanes.shuffle()
 	
-	print("Found %d empty lanes (shuffled)" % empty_lanes.size())
+	print("Found %d lanes with empty column 2 (shuffled)" % available_lanes.size())
 	
-	# Spawn enemies to random empty lanes
-	for lane in empty_lanes:
+	# Spawn enemies to random available lanes at column 2
+	for lane in available_lanes:
 		if spawned_this_turn >= spawn_slots_available:
 			print("  -> Reached spawn limit (%d/%d)" % [spawned_this_turn, spawn_slots_available])
 			break
@@ -54,9 +54,9 @@ func spawn_enemies(lanes: Array[Lane]):
 		# Try to draw an enemy card
 		var enemy_card = deck_manager.draw_enemy_card()
 		if enemy_card:
-			lane.summon_enemy_unit(enemy_card)
+			lane.summon_enemy_unit(enemy_card, 2)  # Spawn at column 2!
 			spawned_this_turn += 1
-			print("  -> Spawned %s to Lane %d" % [enemy_card.card_name, lane.lane_index])
+			print("  -> Spawned %s to Lane %d (column 2)" % [enemy_card.card_name, lane.lane_index])
 		else:
 			print("  -> Enemy deck is empty!")
 			break
