@@ -14,15 +14,18 @@ var base_attack: int
 var current_hp: int
 var max_hp: int
 var current_attack: int
+var attack_range: String = "melee"  # "melee" or "ranged" - inherited from equipped weapons
 
 # Equipment
 var equipped_items: Array[EquipmentCardResource] = []
 var max_equipment_slots: int
 var allowed_slot_types: Array[String] = []
+var occupied_slots: Array[String] = []  # Track which slot types are currently used
 
 # Owner info
 var is_player_unit: bool = true
 var lane_index: int = -1
+var column_position: int = -1  # 0=player, 1=enemy battle, 2=enemy spawn
 
 # UI references
 @onready var hp_label: Label = $HPLabel
@@ -33,11 +36,12 @@ var lane_index: int = -1
 
 var original_bg_color: Color
 
-func initialize(data: BodyCardResource, is_player: bool, lane: int):
+func initialize(data: BodyCardResource, is_player: bool, lane: int, column: int = 0):
 	"""Set up unit with card data"""
 	card_data = data
 	is_player_unit = is_player
 	lane_index = lane
+	column_position = column
 	
 	# Set base stats
 	base_hp = data.hp
@@ -64,23 +68,40 @@ func initialize(data: BodyCardResource, is_player: bool, lane: int):
 	
 	update_display()
 
+func set_column(new_column: int):
+	"""Update the unit's column position (used when enemies advance)"""
+	column_position = new_column
+
 func equip(item: EquipmentCardResource) -> bool:
 	"""Equip an item to this unit. Returns true if successful."""
 	# Check if we have room
 	if equipped_items.size() >= max_equipment_slots:
-		print("%s: Equipment slots full!" % card_data.card_name)
+		print("%s: Equipment slots full! (%d/%d)" % [card_data.card_name, equipped_items.size(), max_equipment_slots])
 		return false
 	
-	# Check if this unit can equip this type
+	# Get slots this item requires
+	var required_slots = item.get_required_slots()
+	
+	# Check if this unit has the allowed slot types for this item
 	if not allowed_slot_types.is_empty():
-		if item.equipment_type not in allowed_slot_types:
-			print("%s: Cannot equip %s (wrong slot type)" % [card_data.card_name, item.card_name])
+		for slot_type in required_slots:
+			if slot_type not in allowed_slot_types:
+				print("%s: Cannot equip %s (needs %s slot, but only has: %s)" % [card_data.card_name, item.card_name, slot_type, ", ".join(allowed_slot_types)])
+				return false
+	
+	# Check if the required slots are already occupied
+	for slot_type in required_slots:
+		if slot_type in occupied_slots:
+			print("%s: Cannot equip %s (%s slot already occupied)" % [card_data.card_name, item.card_name, slot_type])
 			return false
 	
-	# Equip the item
+	# Equip the item and mark slots as occupied
 	equipped_items.append(item)
+	for slot_type in required_slots:
+		occupied_slots.append(slot_type)
+	
 	update_stats()
-	print("%s equipped %s!" % [card_data.card_name, item.card_name])
+	print("%s equipped %s! (occupies: %s)" % [card_data.card_name, item.card_name, ", ".join(required_slots)])
 	return true
 
 func update_stats():
@@ -88,9 +109,16 @@ func update_stats():
 	var hp_bonus = 0
 	var attack_bonus = 0
 	
+	# Reset to melee by default
+	attack_range = "melee"
+	
 	for item in equipped_items:
 		hp_bonus += item.hp_bonus
 		attack_bonus += item.attack_bonus
+		
+		# Check if any equipped weapon is ranged
+		if item.attack_range == "ranged":
+			attack_range = "ranged"
 	
 	# Update max HP and current HP
 	var old_max_hp = max_hp
@@ -117,10 +145,44 @@ func take_damage(amount: int):
 		die()
 
 func attack_target(target: Unit):
-	"""Attack another unit"""
+	"""Attack another unit with animation"""
 	if target:
 		print("%s attacks %s for %d damage!" % [card_data.card_name, target.card_data.card_name, current_attack])
+		
+		# Play attack animation
+		await play_attack_animation(target)
+		
+		# Deal damage after animation
 		target.take_damage(current_attack)
+
+func play_attack_animation(target: Unit = null):
+	"""Animate the unit lunging toward the target (or forward if no target) and back"""
+	var original_position = position
+	var lunge_distance = 40  # How far to move forward
+	var lunge_position: Vector2
+	
+	if target:
+		# Calculate direction to target
+		var direction = (target.global_position - global_position).normalized()
+		lunge_position = position + (direction * lunge_distance)
+	else:
+		# No target - lunge in attack direction based on owner
+		# Players lunge up (toward enemies), enemies lunge down (toward player)
+		var direction = Vector2.UP if is_player_unit else Vector2.DOWN
+		lunge_position = position + (direction * lunge_distance)
+	
+	# Create tween for smooth animation
+	var tween = create_tween()
+	tween.set_trans(Tween.TRANS_QUAD)
+	tween.set_ease(Tween.EASE_OUT)
+	
+	# Lunge forward
+	tween.tween_property(self, "position", lunge_position, 0.15)
+	# Return to original position
+	tween.tween_property(self, "position", original_position, 0.15)
+	
+	# Wait for animation to complete
+	await tween.finished
 
 func die():
 	"""Handle unit death"""

@@ -1,18 +1,26 @@
 extends Node2D
 class_name Lane
-## Manages one lane of combat (player slot + enemy slot)
+## Manages one lane of combat with 3 columns: player (column 0), enemy battle (column 1), enemy spawn (column 2)
 
-signal unit_summoned(unit: Unit, is_player: bool)
+signal unit_summoned(unit: Unit, is_player: bool, column: int)
 signal unit_died(unit: Unit, is_player: bool)
 
 var lane_index: int = 0
-var player_unit: Unit = null
-var enemy_unit: Unit = null
+
+# Column-based unit tracking
+# Column 0: Player units (stationary defenders)
+# Column 1: Enemy battle position (enemies attack from here)
+# Column 2: Enemy spawn position (enemies start here, advance to column 1)
+var column_0_unit: Unit = null  # Player unit
+var column_1_unit: Unit = null  # Enemy in battle position
+var column_2_unit: Unit = null  # Enemy in spawn position
+
 var deck_manager: DeckManager = null  # Reference to deck manager for discarding
 
 # References to spawn positions
-@onready var player_spawn_position: Marker2D = $PlayerSpawn
-@onready var enemy_spawn_position: Marker2D = $EnemySpawn
+@onready var column_0_spawn: Marker2D = $Column0Spawn  # Player spawn (bottom)
+@onready var column_1_spawn: Marker2D = $Column1Spawn  # Enemy battle spawn (middle)
+@onready var column_2_spawn: Marker2D = $Column2Spawn  # Enemy far spawn (top)
 @onready var player_drop_zone: ColorRect = $PlayerDropZone
 
 func _ready():
@@ -30,13 +38,13 @@ func set_deck_manager(deck_mgr: DeckManager):
 	deck_manager = deck_mgr
 
 func summon_player_unit(unit_data: BodyCardResource) -> Unit:
-	"""Summon a player unit to this lane"""
-	if player_unit != null:
-		print("Lane %d already has a player unit!" % lane_index)
+	"""Summon a player unit to column 0 (player position)"""
+	if column_0_unit != null:
+		print("Lane %d already has a player unit in column 0!" % lane_index)
 		return null
 	
-	var unit = _create_unit(unit_data, true)
-	player_unit = unit
+	var unit = _create_unit(unit_data, true, 0)
+	column_0_unit = unit
 	
 	# Dim the drop zone when occupied
 	if player_drop_zone:
@@ -44,57 +52,79 @@ func summon_player_unit(unit_data: BodyCardResource) -> Unit:
 		if player_drop_zone.has_node("PlayerZoneLabel"):
 			player_drop_zone.get_node("PlayerZoneLabel").visible = false
 	
-	unit_summoned.emit(unit, true)
+	unit_summoned.emit(unit, true, 0)
 	return unit
 
-func summon_enemy_unit(unit_data: BodyCardResource) -> Unit:
-	"""Summon an enemy unit to this lane"""
-	if enemy_unit != null:
-		print("Lane %d already has an enemy unit!" % lane_index)
+func summon_enemy_unit(unit_data: BodyCardResource, column: int = 2) -> Unit:
+	"""Summon an enemy unit to specified column (default: column 2 = spawn position)"""
+	if column == 2:
+		if column_2_unit != null:
+			print("Lane %d already has an enemy unit in column 2!" % lane_index)
+			return null
+		
+		var unit = _create_unit(unit_data, false, 2)
+		column_2_unit = unit
+		
+		# Visual spawn effect - flash the unit
+		if unit and unit.background:
+			var original_color = unit.background.color
+			unit.background.color = Color.YELLOW  # Flash yellow
+			await get_tree().create_timer(0.3).timeout
+			if unit and is_instance_valid(unit) and unit.background:
+				unit.background.color = original_color
+		
+		unit_summoned.emit(unit, false, 2)
+		return unit
+	elif column == 1:
+		if column_1_unit != null:
+			print("Lane %d already has an enemy unit in column 1!" % lane_index)
+			return null
+		
+		var unit = _create_unit(unit_data, false, 1)
+		column_1_unit = unit
+		unit_summoned.emit(unit, false, 1)
+		return unit
+	else:
+		print("ERROR: Cannot summon enemy to column %d" % column)
 		return null
-	
-	var unit = _create_unit(unit_data, false)
-	enemy_unit = unit
-	
-	# Visual spawn effect - flash the unit
-	if unit and unit.background:
-		var original_color = unit.background.color
-		unit.background.color = Color.YELLOW  # Flash yellow
-		await get_tree().create_timer(0.3).timeout
-		if unit and is_instance_valid(unit) and unit.background:
-			unit.background.color = original_color
-	
-	unit_summoned.emit(unit, false)
-	return unit
 
-func _create_unit(unit_data: BodyCardResource, is_player: bool) -> Unit:
-	"""Create a unit instance"""
-	# Load unit scene (we'll create this next)
+func _create_unit(unit_data: BodyCardResource, is_player: bool, column: int) -> Unit:
+	"""Create a unit instance in the specified column"""
+	# Load unit scene
 	var unit_scene = load("res://scenes/cards/unit_on_board.tscn")
 	var unit: Unit = unit_scene.instantiate()
 	
-	# Position the unit
-	if is_player:
-		if player_spawn_position:
-			unit.position = player_spawn_position.position
-		else:
-			unit.position = Vector2(-100, 0)  # Default player position
+	# Position the unit based on column
+	var spawn_marker: Marker2D = null
+	if column == 0 and column_0_spawn:
+		spawn_marker = column_0_spawn
+	elif column == 1 and column_1_spawn:
+		spawn_marker = column_1_spawn
+	elif column == 2 and column_2_spawn:
+		spawn_marker = column_2_spawn
+	
+	if spawn_marker:
+		unit.position = spawn_marker.position
 	else:
-		if enemy_spawn_position:
-			unit.position = enemy_spawn_position.position
+		# Fallback positions if markers don't exist yet
+		if column == 0:
+			unit.position = Vector2(0, 0)  # Player column (bottom)
+		elif column == 1:
+			unit.position = Vector2(0, -100)  # Enemy battle column (middle)
 		else:
-			unit.position = Vector2(100, 0)  # Default enemy position
+			unit.position = Vector2(0, -200)  # Enemy spawn column (top)
 	
 	add_child(unit)
-	unit.initialize(unit_data, is_player, lane_index)
+	unit.initialize(unit_data, is_player, lane_index, column)
 	unit.died.connect(_on_unit_died)
 	
 	return unit
 
 func _on_unit_died(unit: Unit):
 	"""Handle when a unit in this lane dies"""
-	if unit == player_unit:
-		player_unit = null
+	# Check which column the unit was in
+	if unit == column_0_unit:
+		column_0_unit = null
 		# Discard the player's body card
 		if deck_manager and unit.card_data:
 			deck_manager.discard_card(unit.card_data)
@@ -105,8 +135,15 @@ func _on_unit_died(unit: Unit):
 			if player_drop_zone.has_node("PlayerZoneLabel"):
 				player_drop_zone.get_node("PlayerZoneLabel").visible = true
 		unit_died.emit(unit, true)
-	elif unit == enemy_unit:
-		enemy_unit = null
+	elif unit == column_1_unit:
+		column_1_unit = null
+		# Discard the enemy card
+		if deck_manager and unit.card_data:
+			deck_manager.discard_enemy_card(unit.card_data)
+			print("Enemy card discarded: %s" % unit.card_data.card_name)
+		unit_died.emit(unit, false)
+	elif unit == column_2_unit:
+		column_2_unit = null
 		# Discard the enemy card
 		if deck_manager and unit.card_data:
 			deck_manager.discard_enemy_card(unit.card_data)
@@ -114,67 +151,117 @@ func _on_unit_died(unit: Unit):
 		unit_died.emit(unit, false)
 
 func resolve_combat():
-	"""Resolve combat in this lane (player attacks first). Returns [overflow_to_player, overflow_to_enemy]."""
+	"""Resolve combat in this lane. Returns [overflow_to_player, overflow_to_enemy]."""
 	var overflow_to_player = 0
 	var overflow_to_enemy = 0
 	
-	if player_unit and enemy_unit:
-		# Player attacks first!
-		print("\n=== Lane %d Combat ===" % lane_index)
+	var combat_happened = false  # Track if units actually fought
+	
+	# Player unit attacks (prioritize Column 1, then Column 2)
+	if column_0_unit:
+		var player_target = null
 		
-		player_unit.attack_target(enemy_unit)
+		# Find target: Column 1 first, then Column 2 (only if ranged)
+		if column_1_unit:
+			player_target = column_1_unit
+		elif column_2_unit and column_0_unit.attack_range == "ranged":
+			# Only ranged units can attack column 2 (spawn position)
+			player_target = column_2_unit
 		
-		# Enemy counter-attacks only if still alive (HP > 0)
-		# Note: We check current_hp because unit might be queued for deletion but still valid
-		if enemy_unit and is_instance_valid(enemy_unit) and enemy_unit.current_hp > 0:
-			var player_hp_before = player_unit.current_hp
-			enemy_unit.attack_target(player_unit)
+		if player_target:
+			print("\n=== Lane %d Combat ===" % lane_index)
+			combat_happened = true
 			
-			# If player unit died, check for overflow damage
-			if not player_unit or not is_instance_valid(player_unit):
-				var overkill = enemy_unit.current_attack - player_hp_before
-				if overkill > 0:
-					overflow_to_player = overkill
-					print("⚠️ Overflow damage: %d damage goes to player!" % overflow_to_player)
-		
-		print("=================\n")
-	elif not player_unit and enemy_unit:
-		# No player unit to block - enemy attacks player directly
-		overflow_to_player = enemy_unit.current_attack
-		print("Lane %d: %s attacks player directly for %d damage!" % [lane_index, enemy_unit.card_data.card_name, overflow_to_player])
-	elif player_unit and not enemy_unit:
-		# Player unit has no blocker - attacks enemy directly
-		overflow_to_enemy = player_unit.current_attack
-		print("Lane %d: %s attacks enemy directly for %d damage!" % [lane_index, player_unit.card_data.card_name, overflow_to_enemy])
+			await column_0_unit.attack_target(player_target)
+			
+			# Check for overflow damage from player attack
+			if player_target and player_target.current_hp < 0:
+				overflow_to_enemy = abs(player_target.current_hp)
+				print("⚠️ Player overflow: %d damage goes to enemy!" % overflow_to_enemy)
+			
+			print("=================\n")
+	
+	# Enemy unit counter-attacks (only from Column 1, and only if still alive)
+	if column_1_unit and is_instance_valid(column_1_unit) and column_1_unit.current_hp > 0:
+		if column_0_unit:
+			print("\n=== Lane %d Enemy Counter ===" % lane_index)
+			await column_1_unit.attack_target(column_0_unit)
+			
+			# Check for overflow damage from enemy attack
+			if column_0_unit and column_0_unit.current_hp < 0:
+				overflow_to_player = abs(column_0_unit.current_hp)
+				print("⚠️ Enemy overflow: %d damage goes to player!" % overflow_to_player)
+			
+			print("=================\n")
+		else:
+			# No player unit to block - enemy attacks player directly
+			print("Lane %d: %s attacks player directly for %d damage!" % [lane_index, column_1_unit.card_data.card_name, column_1_unit.current_attack])
+			await column_1_unit.play_attack_animation()
+			overflow_to_player = column_1_unit.current_attack
+	
+	# If player unit exists but found no target in any column - direct damage to enemy HP
+	if column_0_unit and not column_1_unit and not column_2_unit and not combat_happened:
+		print("Lane %d: %s attacks enemy directly for %d damage!" % [lane_index, column_0_unit.card_data.card_name, column_0_unit.current_attack])
+		await column_0_unit.play_attack_animation()
+		overflow_to_enemy = column_0_unit.current_attack
 	
 	return [overflow_to_player, overflow_to_enemy]
 
+func advance_enemies():
+	"""Move enemies forward one column (column 2 -> column 1)"""
+	# Only advance from column 2 to column 1 if column 1 is empty
+	if column_2_unit and not column_1_unit:
+		print("Lane %d: %s advances from spawn to battle position!" % [lane_index, column_2_unit.card_data.card_name])
+		
+		# Move the unit reference
+		column_1_unit = column_2_unit
+		column_2_unit = null
+		
+		# Update unit's column position
+		column_1_unit.set_column(1)
+		
+		# Animate movement to new position
+		if column_1_spawn:
+			var tween = create_tween()
+			tween.tween_property(column_1_unit, "position", column_1_spawn.position, 0.5)
+
 func has_player_unit() -> bool:
 	"""Check if there's a player unit in this lane"""
-	return player_unit != null
+	return column_0_unit != null
 
 func has_enemy_unit() -> bool:
-	"""Check if there's an enemy unit in this lane"""
-	return enemy_unit != null
+	"""Check if there's an enemy unit in this lane (any column)"""
+	return column_1_unit != null or column_2_unit != null
+
+func get_enemy_in_column(column: int) -> Unit:
+	"""Get enemy unit in specified column"""
+	if column == 1:
+		return column_1_unit
+	elif column == 2:
+		return column_2_unit
+	return null
 
 func is_empty() -> bool:
 	"""Check if lane is completely empty"""
-	return player_unit == null and enemy_unit == null
+	return column_0_unit == null and column_1_unit == null and column_2_unit == null
 
 func get_lane_state() -> String:
 	"""Get debug info about this lane"""
-	var player_info = "Empty"
-	var enemy_info = "Empty"
+	var col0_info = "Empty"
+	var col1_info = "Empty"
+	var col2_info = "Empty"
 	
-	if player_unit:
-		player_info = player_unit.get_unit_info()
-	if enemy_unit:
-		enemy_info = enemy_unit.get_unit_info()
+	if column_0_unit:
+		col0_info = column_0_unit.get_unit_info()
+	if column_1_unit:
+		col1_info = column_1_unit.get_unit_info()
+	if column_2_unit:
+		col2_info = column_2_unit.get_unit_info()
 	
-	return "Lane %d | Player: %s | Enemy: %s" % [lane_index, player_info, enemy_info]
+	return "Lane %d | Player(C0): %s | Enemy(C1): %s | Enemy(C2): %s" % [lane_index, col0_info, col1_info, col2_info]
 
 func is_point_in_player_zone(point: Vector2) -> bool:
-	"""Check if a global position is within this lane's player drop zone"""
+	"""Check if a global position is within this lane's player drop zone (column 0)"""
 	if not player_drop_zone:
 		return false
 	
@@ -183,13 +270,13 @@ func is_point_in_player_zone(point: Vector2) -> bool:
 
 func _on_drop_zone_hover():
 	"""Visual feedback when hovering over drop zone"""
-	if player_drop_zone and not player_unit:
+	if player_drop_zone and not column_0_unit:
 		player_drop_zone.color = Color(0.3, 0.5, 0.3, 0.7)  # Brighter green
 
 func _on_drop_zone_exit():
 	"""Reset visual when leaving drop zone"""
 	if player_drop_zone:
-		if player_unit:
+		if column_0_unit:
 			player_drop_zone.color = Color(0.2, 0.3, 0.2, 0.3)  # Dimmer when occupied
 		else:
 			player_drop_zone.color = Color(0.2, 0.3, 0.2, 0.5)  # Normal

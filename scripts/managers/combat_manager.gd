@@ -11,6 +11,7 @@ signal game_lost()
 enum Phase {
 	DRAW,
 	PLAY,
+	ADVANCE,   # New phase: enemies advance from column 2 to column 1
 	COMBAT,
 	CLEANUP
 }
@@ -23,8 +24,8 @@ var player_hp: int = 20
 var max_player_hp: int = 20
 
 # Enemy HP
-var enemy_hp: int = 20
-var max_enemy_hp: int = 20
+var enemy_hp: int = 40
+var max_enemy_hp: int = 40
 
 # References
 var deck_manager: DeckManager
@@ -53,22 +54,54 @@ func start_game():
 	player_hp = max_player_hp
 	enemy_hp = max_enemy_hp
 	
-	# Start with enemy turn (cleanup phase to spawn enemies)
+	# Draw initial hand: 2 body cards, 3 equipment cards
 	print("\n\n========== GAME START ==========")
+	print("Drawing initial hand: 2 body + 3 equipment cards")
+	_draw_initial_hand()
+	
+	# Start with enemy turn (cleanup phase to spawn enemies)
 	print("Enemies take the first turn!\n")
 	enter_cleanup_phase()
+
+func _draw_initial_hand():
+	"""Draw starting hand using auto-draw system"""
+	_auto_draw_hand()
+	print("Initial hand drawn: %d cards total" % deck_manager.hand.size())
 
 func start_turn():
 	"""Begin a new turn"""
 	turn_number += 1
-	can_draw_this_turn = true
-	current_phase = Phase.DRAW
 	
 	print("\n\n========== TURN %d ==========" % turn_number)
 	turn_started.emit(turn_number)
-	phase_changed.emit("DRAW")
 	
-	waiting_for_player = true
+	# Auto-draw 5 new cards
+	print("Auto-drawing 5 cards...")
+	_auto_draw_hand()
+	
+	# Go directly to play phase
+	enter_play_phase()
+
+func _auto_draw_hand():
+	"""Auto-draw cards to fill hand to 5 cards (mix of body and equipment)"""
+	var cards_needed = deck_manager.MAX_HAND_SIZE - deck_manager.hand.size()
+	
+	# Draw alternating body and equipment cards to fill hand
+	for i in cards_needed:
+		var card
+		if i % 2 == 0:
+			# Draw body card
+			card = deck_manager._draw_single_card(deck_manager.body_draw_pile, deck_manager.body_discard_pile)
+		else:
+			# Draw equipment card
+			card = deck_manager._draw_single_card(deck_manager.equipment_draw_pile, deck_manager.equipment_discard_pile)
+		
+		if card:
+			deck_manager.hand.append(card)
+	
+	# Emit signal to update UI
+	deck_manager.hand_updated.emit(deck_manager.hand)
+	print("Drew %d cards - hand now has %d cards" % [cards_needed, deck_manager.hand.size()])
 
 func on_pile_selected(pile_type: String):
 	"""Player chose which pile to draw from"""
@@ -150,12 +183,36 @@ func equip_unit(equipment: EquipmentCardResource, unit: Unit) -> bool:
 	return unit.equip(equipment)
 
 func end_turn():
-	"""Player ends their turn, start combat phase"""
+	"""Player ends their turn"""
 	if current_phase != Phase.PLAY:
 		print("ERROR: Can only end turn during PLAY phase!")
 		return
 	
+	# Auto-discard all remaining cards in hand
+	if deck_manager.hand.size() > 0:
+		print("Discarding %d unplayed cards" % deck_manager.hand.size())
+		var cards_to_discard = deck_manager.hand.duplicate()
+		for card in cards_to_discard:
+			deck_manager.discard_card(card)
+	
+	# Combat happens AFTER discarding
 	enter_combat_phase()
+
+func enter_advance_phase():
+	"""Enemies advance from spawn (column 2) to battle position (column 1)"""
+	current_phase = Phase.ADVANCE
+	phase_changed.emit("ADVANCE")
+	print("\n--- ADVANCE PHASE ---")
+	
+	# Move all enemies forward
+	for lane in lanes:
+		lane.advance_enemies()
+	
+	# Short delay to see the movement
+	await get_tree().create_timer(0.8).timeout
+	
+	# After advancing, go to cleanup (spawn new enemies)
+	enter_cleanup_phase()
 
 func enter_combat_phase():
 	"""Resolve combat in all lanes"""
@@ -163,9 +220,9 @@ func enter_combat_phase():
 	phase_changed.emit("COMBAT")
 	print("\n--- COMBAT PHASE ---")
 	
-	# Resolve each lane and collect overflow damage
+	# Resolve each lane and collect overflow damage (await for animations)
 	for lane in lanes:
-		var overflow = lane.resolve_combat()
+		var overflow = await lane.resolve_combat()
 		var overflow_to_player = overflow[0]
 		var overflow_to_enemy = overflow[1]
 		
@@ -177,7 +234,7 @@ func enter_combat_phase():
 	
 	combat_resolved.emit()
 	
-	# Check win/loss before cleanup
+	# Check win/loss before advance
 	if check_win_condition():
 		game_won.emit()
 		print("\n🎉 YOU WIN! 🎉")
@@ -188,18 +245,19 @@ func enter_combat_phase():
 		print("\n💀 YOU LOST! 💀")
 		return
 	
-	enter_cleanup_phase()
+	# After combat, enemies advance
+	enter_advance_phase()
 
 func enter_cleanup_phase():
-	"""Enemy AI spawns new units"""
+	"""Enemy AI spawns new units, then start next player turn"""
 	current_phase = Phase.CLEANUP
 	phase_changed.emit("CLEANUP")
 	print("\n--- CLEANUP PHASE ---")
 	
-	# Wait a moment after combat before spawning (visual clarity)
+	# Wait a moment after advance before spawning (visual clarity)
 	await get_tree().create_timer(0.8).timeout
 	
-	# Enemy AI spawns
+	# Enemy AI spawns new units at column 2
 	if enemy_ai:
 		print("\nEnemy reinforcements arriving...")
 		enemy_ai.spawn_enemies(lanes)
@@ -209,7 +267,7 @@ func enter_cleanup_phase():
 	for lane in lanes:
 		print("  " + lane.get_lane_state())
 	
-	# Start next turn
+	# Start next player turn
 	await get_tree().create_timer(1.0).timeout
 	start_turn()
 
@@ -244,6 +302,8 @@ func get_current_phase_name() -> String:
 			return "DRAW"
 		Phase.PLAY:
 			return "PLAY"
+		Phase.ADVANCE:
+			return "ADVANCE"
 		Phase.COMBAT:
 			return "COMBAT"
 		Phase.CLEANUP:

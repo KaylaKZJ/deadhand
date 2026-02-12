@@ -19,21 +19,21 @@ script = ExtResource("3")
 script = ExtResource("4")
 
 [node name="Board" type="Node2D" parent="."]
-position = Vector2(800, 360)
+position = Vector2(640, 360)
 
 [node name="Lane1" parent="Board" instance=ExtResource("5")]
-position = Vector2(0, -160)
+position = Vector2(-320, 0)
 
 [node name="Lane2" parent="Board" instance=ExtResource("5")]
-position = Vector2(0, -80)
+position = Vector2(-160, 0)
 
 [node name="Lane3" parent="Board" instance=ExtResource("5")]
 
 [node name="Lane4" parent="Board" instance=ExtResource("5")]
-position = Vector2(0, 80)
+position = Vector2(160, 0)
 
 [node name="Lane5" parent="Board" instance=ExtResource("5")]
-position = Vector2(0, 160)
+position = Vector2(320, 0)
 
 [node name="UI" type="CanvasLayer" parent="."]
 
@@ -115,12 +115,12 @@ grow_horizontal = 2
 [node name="BodyPileButton" type="Button" parent="UI/DrawButtons"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Draw from BODY Pile"
+text = "BODY"
 
 [node name="EquipmentPileButton" type="Button" parent="UI/DrawButtons"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Draw from EQUIPMENT Pile"
+text = "EQUIPMENT"
 
 [node name="EndTurnButton" type="Button" parent="UI"]
 anchors_preset = 3
@@ -137,3 +137,35 @@ grow_vertical = 0
 disabled = true
 text = "END TURN"
 theme_override_font_sizes/font_size = 20
+
+[node name="GameOverPanel" type="Panel" parent="UI"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/GameOverPanel"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -100.0
+offset_right = 200.0
+offset_bottom = 100.0
+grow_horizontal = 2
+grow_vertical = 2
+alignment = 1
+
+[node name="GameOverLabel" type="Label" parent="UI/GameOverPanel/VBoxContainer"]
+layout_mode = 2
+text = "GAME OVER"
+theme_override_font_sizes/font_size = 48
+horizontal_alignment = 1
+
+[node name="RestartButton" type="Button" parent="UI/GameOverPanel/VBoxContainer"]
+layout_mode = 2
+text = "RESTART"
+theme_override_font_sizes/font_size = 32
