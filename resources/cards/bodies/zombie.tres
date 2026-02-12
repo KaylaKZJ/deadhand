@@ -6,8 +6,8 @@
 script = ExtResource("1")
 card_name = "Zombie"
 card_type = "body"
-description = "Tough rotting corpse. High HP but only 1 armor slot."
-hp = 3
-attack = 2
+description = "Tough rotting corpse. 1 equipment slot."
+hp = 2
+attack = 3
 equipment_slots = 1
-slot_types = Array[String](["armor"])
+slot_types = Array[String](["helmet", "armor", "shield", "weapon"])

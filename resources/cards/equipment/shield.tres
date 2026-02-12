@@ -7,6 +7,6 @@ script = ExtResource("1")
 card_name = "Shield"
 card_type = "equipment"
 description = "Sturdy wooden shield. +3 HP"
-equipment_type = "armor"
+equipment_type = "shield"
 hp_bonus = 3
 attack_bonus = 0

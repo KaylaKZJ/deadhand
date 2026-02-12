@@ -6,8 +6,8 @@
 script = ExtResource("1")
 card_name = "Ghost"
 card_type = "body"
-description = "Fast spectral attacker. High ATK but can only equip weapons."
+description = "Fast spectral attacker. 2 equipment slots."
 hp = 2
-attack = 3
-equipment_slots = 1
-slot_types = Array[String](["weapon"])
+attack = 2
+equipment_slots = 2
+slot_types = Array[String](["helmet", "armor", "shield", "weapon"])
