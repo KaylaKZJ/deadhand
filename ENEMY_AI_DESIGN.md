@@ -174,7 +174,342 @@ The enemy AI in DEADHAND uses **algorithmic behavior patterns** to create intell
 
 ---
 
-## Implementation Architecture
+## Adding Randomization While Keeping Strategic Depth
+
+### The Problem with Pure Determinism
+Slay the Spire and Inscryption use **fully deterministic** enemy AI - same situation always produces the same action. This has benefits (learnable, puzzle-like) but drawbacks:
+
+**Cons of Pure Determinism:**
+- Once you learn the pattern, fights feel "solved"
+- Replaying the same encounter is identical (boring)
+- No emergent moments or surprises
+- Can feel robotic rather than intelligent
+
+### The Problem with Pure Randomness
+Fully random AI (pick any action at random) feels chaotic and frustrating:
+
+**Cons of Pure Randomness:**
+- No skill expression - you can't plan
+- "I lost to RNG" moments
+- Feels arbitrary rather than strategic
+- Hard to balance (too swingy)
+
+### The Solution: **Controlled Randomization**
+
+The sweet spot is **probabilistic decision-making with strategic weights**. The AI has clear preferences, but introduces variance.
+
+---
+
+## Randomization Techniques
+
+### 1. **Weighted Probabilities** (Recommended)
+Instead of "always spawn X", use "70% chance to spawn X, 30% Y".
+
+**Example - Aggressive AI:**
+```gdscript
+func choose_enemy_unit_aggressive() -> BodyCardResource:
+    var roll = randf()  # 0.0 to 1.0
+    
+    if roll < 0.60:  # 60% high-attack
+        return [barbarian, thief].pick_random()
+    elif roll < 0.90:  # 30% medium
+        return knight
+    else:  # 10% weak
+        return squire
+```
+
+**Benefits:**
+- Still feels strategic (biased toward high-attack)
+- Adds variety (not always Barbarians)
+- Learnable (you know the tendencies, just not exact outcome)
+- Balanced (percentages are tunable)
+
+**When to use:** All personality types can benefit from this
+
+---
+
+### 2. **Action Sets with Random Selection**
+AI has 2-3 valid "good" moves, picks one randomly.
+
+**Example - Mirror AI:**
+```gdscript
+func choose_spawn_lane_mirror(lanes: Array[Lane]) -> Lane:
+    var valid_lanes: Array[Lane] = []
+    
+    # Find all lanes with player units (all are "good" choices)
+    for lane in lanes:
+        if lane.has_player_unit() and lane.get_enemy_in_column(2) == null:
+            valid_lanes.append(lane)
+    
+    if valid_lanes.is_empty():
+        # Fall back to random empty lane
+        valid_lanes = _get_empty_lanes(lanes)
+    
+    # Pick one randomly from the valid set
+    return valid_lanes.pick_random()
+```
+
+**Benefits:**
+- Always makes a "smart" move (from valid set)
+- Unpredictable which smart move it picks
+- Feels intelligent but varied
+
+**When to use:** Mirror, Punisher, Defensive (where multiple lanes are equally good)
+
+---
+
+### 3. **Per-Combat Seed** (Deterministic Replay)
+Same encounter plays identically WITHIN one attempt, but differently on retry.
+
+**Example Implementation:**
+```gdscript
+class_name EnemyAI
+
+var combat_seed: int  # Set at combat start
+var rng: RandomNumberGenerator
+
+func initialize_combat():
+    # Use timestamp or player actions as seed
+    combat_seed = Time.get_ticks_msec()
+    rng = RandomNumberGenerator.new()
+    rng.seed = combat_seed
+    
+func choose_enemy_unit() -> BodyCardResource:
+    # Use seeded RNG instead of global randf()
+    var roll = rng.randf()
+    if roll < 0.6:
+        return barbarian
+    else:
+        return squire
+```
+
+**Benefits:**
+- Same fight plays the same during one run (can plan)
+- Different on retry (replayability)
+- Common in roguelikes (Isaac, Spelunky)
+
+**When to use:** If you want "learnable within a run" but variety across runs
+
+---
+
+### 4. **Personality Traits/Modifiers**
+Each enemy AI instance gets random traits that modify behavior.
+
+**Example - Trait System:**
+```gdscript
+enum AITrait {
+    RECKLESS,   # +20% attack preference, -10% defense
+    CAUTIOUS,   # +20% defense preference, spawns further back
+    GREEDY,     # Prioritizes lanes with equipped player units
+    PATIENT     # Waits 1 extra turn between spawns
+}
+
+var personality: Personality  # Base AI type
+var traits: Array[AITrait]    # 1-2 random modifiers
+
+func choose_enemy_unit() -> BodyCardResource:
+    var base_weights = _get_base_weights_for_personality()
+    
+    # Apply trait modifiers
+    if AITrait.RECKLESS in traits:
+        base_weights["attack"] *= 1.2
+        base_weights["defense"] *= 0.8
+    
+    # Select based on modified weights
+    return _weighted_selection(base_weights)
+```
+
+**Benefits:**
+- Same personality feels different each game
+- Easy to communicate to player ("Reckless Aggressive AI")
+- Stackable modifiers create complexity
+
+**When to use:** If you want high variance but still deterministic within a game
+
+---
+
+### 5. **Stochastic Lane Selection**
+Instead of "always pick empty lane", use probability based on lane quality.
+
+**Example - Weighted Lane Selection:**
+```gdscript
+func choose_spawn_lane_weighted(lanes: Array[Lane]) -> Lane:
+    var weights: Array[float] = []
+    
+    for lane in lanes:
+        var weight = 1.0  # Base weight
+        
+        # Modify weight based on lane state
+        if lane.get_enemy_in_column(2) != null:
+            weight = 0.0  # Can't spawn here
+        elif lane.has_player_unit():
+            weight = 3.0  # 3x more likely (contest player)
+        elif lane.is_empty():
+            weight = 2.0  # 2x more likely (spread wide)
+        # else: weight = 1.0 (default)
+        
+        weights.append(weight)
+    
+    # Weighted random selection
+    return _pick_weighted_random(lanes, weights)
+```
+
+**Benefits:**
+- Biased toward good moves, but not deterministic
+- Can make "suboptimal but not terrible" choices
+- Feels more natural/human
+
+**When to use:** Any AI that has clear lane preferences but could benefit from variance
+
+---
+
+### 6. **Cooldowns and History Tracking**
+Prevent repetitive patterns by tracking recent actions.
+
+**Example - Unit Diversity:**
+```gdscript
+var last_spawned_units: Array[String] = []  # Track last 3 spawns
+const REPEAT_PENALTY: float = 0.3  # Reduce chance of same unit
+
+func choose_enemy_unit() -> BodyCardResource:
+    var units = [squire, knight, barbarian, thief]
+    var weights = [1.0, 1.0, 1.0, 1.0]  # Base equal weights
+    
+    # Penalize recently spawned units
+    for i in units.size():
+        if units[i].card_name in last_spawned_units:
+            weights[i] *= REPEAT_PENALTY
+    
+    var chosen = _pick_weighted_random(units, weights)
+    
+    # Update history
+    last_spawned_units.append(chosen.card_name)
+    if last_spawned_units.size() > 3:
+        last_spawned_units.pop_front()
+    
+    return chosen
+```
+
+**Benefits:**
+- Creates natural variety
+- Prevents "3 Barbarians in a row" spam
+- Still allows repeats if unlucky
+
+**When to use:** Chaotic AI, or any AI that might get repetitive
+
+---
+
+## Hybrid Approach: Recommended Implementation
+
+Combine multiple techniques for best results:
+
+```gdscript
+class_name EnemyAI
+
+var personality: Personality
+var combat_seed: int
+var rng: RandomNumberGenerator
+var spawn_history: Array[String] = []
+
+func initialize_combat():
+    # 1. Per-combat seed for consistent replay
+    combat_seed = Time.get_ticks_msec()
+    rng = RandomNumberGenerator.new()
+    rng.seed = combat_seed
+    
+    # 2. Random personality selection
+    personality = [
+        Personality.AGGRESSIVE,
+        Personality.DEFENSIVE,
+        Personality.MIRROR
+    ].pick_random()
+
+func choose_spawn_lane(lanes: Array[Lane]) -> Lane:
+    # 3. Action set - find all valid lanes
+    var valid_lanes = _get_valid_lanes_for_personality(lanes)
+    
+    # 4. Weighted selection from valid set
+    var weights = _calculate_lane_weights(valid_lanes)
+    return _pick_weighted_random(valid_lanes, weights)
+
+func choose_enemy_unit() -> BodyCardResource:
+    # 5. Weighted probabilities based on personality
+    var base_weights = _get_unit_weights_for_personality()
+    
+    # 6. History penalty (reduce repeats)
+    base_weights = _apply_history_penalty(base_weights)
+    
+    # 7. Seeded random selection
+    return _pick_weighted_random_seeded(all_units, base_weights)
+```
+
+**This approach gives you:**
+- ✅ Strategic depth (personality-driven weights)
+- ✅ Replayability (random personality, seeded variance)
+- ✅ Consistency within combat (seeded RNG)
+- ✅ Natural variety (history tracking)
+- ✅ Tunability (adjust weights for balance)
+
+---
+
+## Comparison: Deterministic vs. Randomized
+
+| Aspect | Pure Deterministic | Controlled Random | Pure Random |
+|--------|-------------------|-------------------|-------------|
+| **Learnability** | ✅ Easy | ✅ Medium | ❌ Hard |
+| **Replayability** | ❌ Low | ✅ High | ✅ High |
+| **Strategic Depth** | ✅ High | ✅ High | ❌ Low |
+| **Frustration** | ✅ Low | ✅ Low | ❌ High |
+| **Feels "Smart"** | ⚠️ Robotic | ✅ Natural | ❌ Arbitrary |
+| **Implementation** | ✅ Simple | ⚠️ Medium | ✅ Simple |
+| **Examples** | StS, Inscryption | Hearthstone, Griftlands | None (bad idea) |
+
+---
+
+## Tuning Randomness Levels
+
+Too much randomness? Adjust these dials:
+
+### Low Randomness (More Like StS)
+- Use 90/10 probability splits (heavily biased)
+- Small action sets (2 valid moves max)
+- Long history tracking (last 5 spawns)
+- **Result:** Feels mostly deterministic with occasional variance
+
+### Medium Randomness (Recommended)
+- Use 60/30/10 probability splits
+- Moderate action sets (3-4 valid moves)
+- Short history tracking (last 3 spawns)
+- **Result:** Clear tendencies but unpredictable outcomes
+
+### High Randomness (More Like Hearthstone)
+- Use 40/30/30 probability splits (more even)
+- Large action sets (5+ valid moves)
+- No history tracking
+- **Result:** Feels chaotic but still strategic
+
+---
+
+## Testing Randomized AI
+
+### Playtest Metrics
+Track these across 20+ games:
+
+1. **Variance**: Do the same encounters feel different each time?
+2. **Skill Expression**: Can skilled players still win consistently?
+3. **Frustration Moments**: Are there "BS losses" to bad RNG?
+4. **Pattern Recognition**: Can players identify AI personality within 2-3 turns?
+
+### Balance Iteration
+1. Start with **medium randomness** (60/30/10 splits)
+2. Play 10 games and track frustration moments
+3. If too random: increase bias (70/20/10 or 80/15/5)
+4. If too predictable: decrease bias (50/30/20)
+5. Repeat until win rate is 40-60%
+
+---
+
+## Implementation Architecture (Updated for Randomization)
 
 ### EnemyAI Class Structure
 ```gdscript
@@ -189,10 +524,67 @@ enum Personality {
     CHAOTIC
 }
 
+enum AITrait {
+    NONE,
+    RECKLESS,   # +20% attack preference
+    CAUTIOUS,   # +20% defense preference
+    GREEDY,     # Prioritizes equipped units
+    PATIENT     # Slower spawn rate
+}
+
 var current_personality: Personality
+var combat_seed: int
+var rng: RandomNumberGenerator
 var favorite_units: Array[BodyCardResource]  # For CHAOTIC
 var game_turn: int  # For WAVE
+var spawn_history: Array[String] = []  # Track last N spawns
+var traits: Array[AITrait] = []  # Personality modifiers (optional)
+
+func _init():
+    # Initialize seeded RNG for this combat
+    combat_seed = Time.get_ticks_msec()
+    rng = RandomNumberGenerator.new()
+    rng.seed = combat_seed
 ```
+
+### Utility Functions (Randomization Helpers)
+
+```gdscript
+func _pick_weighted_random(options: Array, weights: Array[float]):
+    """Select random element from options using weights"""
+    var total_weight = 0.0
+    for w in weights:
+        total_weight += w
+    
+    var roll = rng.randf() * total_weight
+    var cumulative = 0.0
+    
+    for i in options.size():
+        cumulative += weights[i]
+        if roll < cumulative:
+            return options[i]
+    
+    return options[-1]  # Fallback
+
+func _apply_history_penalty(weights: Dictionary) -> Dictionary:
+    """Reduce weight of recently spawned units"""
+    const PENALTY = 0.3
+    var modified = weights.duplicate()
+    
+    for unit_name in spawn_history:
+        if unit_name in modified:
+            modified[unit_name] *= PENALTY
+    
+    return modified
+
+func _update_spawn_history(unit_name: String):
+    """Track spawned unit, keep only last 3"""
+    spawn_history.append(unit_name)
+    if spawn_history.size() > 3:
+        spawn_history.pop_front()
+```
+
+### Core Functions
 
 ### Core Functions
 
@@ -200,21 +592,171 @@ var game_turn: int  # For WAVE
 - Called at game start
 - Randomly chooses AI personality
 - Initializes personality-specific data (e.g., CHAOTIC favorites)
+- Can optionally assign random traits
+
+```gdscript
+func select_personality():
+    # Random personality selection
+    current_personality = [
+        Personality.AGGRESSIVE,
+        Personality.DEFENSIVE,
+        Personality.MIRROR,
+        Personality.PUNISHER
+    ].pick_random()
+    
+    # Optional: Add random traits (10% chance)
+    if rng.randf() < 0.10:
+        traits.append([
+            AITrait.RECKLESS,
+            AITrait.CAUTIOUS,
+            AITrait.GREEDY
+        ].pick_random())
+    
+    # Initialize personality-specific data
+    if current_personality == Personality.CHAOTIC:
+        _select_favorite_units()
+```
 
 #### `choose_spawn_lane(lanes: Array[Lane]) -> Lane`
-- Returns best lane based on personality
+- Returns best lane based on personality (with randomization)
 - Takes current board state as input
-- Implements lane priority logic
+- Implements lane priority logic with weighted selection
+
+```gdscript
+func choose_spawn_lane(lanes: Array[Lane]) -> Lane:
+    # Get valid lanes based on personality
+    var valid_lanes = []
+    var weights = []
+    
+    match current_personality:
+        Personality.AGGRESSIVE:
+            # Prefer empty lanes, but weighted random
+            for lane in lanes:
+                if lane.get_enemy_in_column(2) == null:
+                    var weight = 1.0
+                    if lane.is_empty():
+                        weight = 3.0  # 3x more likely
+                    valid_lanes.append(lane)
+                    weights.append(weight)
+        
+        Personality.DEFENSIVE:
+            # Prefer lanes with existing enemies
+            for lane in lanes:
+                if lane.get_enemy_in_column(2) == null:
+                    var weight = 1.0
+                    if lane.has_enemy_unit():
+                        weight = 5.0  # 5x more likely
+                    valid_lanes.append(lane)
+                    weights.append(weight)
+        
+        Personality.MIRROR:
+            # Prefer lanes with player units
+            for lane in lanes:
+                if lane.get_enemy_in_column(2) == null:
+                    var weight = 1.0
+                    if lane.has_player_unit():
+                        weight = 4.0  # 4x more likely
+                    valid_lanes.append(lane)
+                    weights.append(weight)
+    
+    if valid_lanes.is_empty():
+        return null
+    
+    # Weighted random selection
+    return _pick_weighted_random(valid_lanes, weights)
+```
 
 #### `choose_enemy_unit(lane: Lane) -> BodyCardResource`
-- Returns best enemy type for selected lane
+- Returns best enemy type for selected lane (with probabilities)
 - Considers personality preferences
 - May read game state (player HP, unit stats, etc.)
+- Applies history penalty to avoid repetition
+
+```gdscript
+func choose_enemy_unit(lane: Lane) -> BodyCardResource:
+    # Get base weights for personality
+    var weights = {}
+    
+    match current_personality:
+        Personality.AGGRESSIVE:
+            weights = {
+                "barbarian": 0.60,  # 60% high-attack
+                "thief": 0.20,
+                "knight": 0.15,     # 15% medium
+                "squire": 0.05      # 5% weak
+            }
+        
+        Personality.DEFENSIVE:
+            weights = {
+                "knight": 0.60,     # 60% high-HP
+                "squire": 0.30,     # 30% medium
+                "barbarian": 0.10   # 10% weak
+            }
+        
+        Personality.MIRROR:
+            # Dynamic weights based on player unit
+            var player_unit = lane.get_player_unit()
+            if player_unit:
+                var total_stats = player_unit.hp + player_unit.attack
+                if total_stats <= 2:
+                    weights = {"squire": 1.0}
+                elif total_stats <= 5:
+                    weights = {"knight": 1.0}
+                else:
+                    weights = {"barbarian": 0.7, "thief": 0.3}
+            else:
+                weights = {"squire": 1.0}  # Default
+        
+        Personality.PUNISHER:
+            # State-based weights
+            var player_hp = get_player_hp()
+            if player_hp > 15:
+                weights = {"barbarian": 0.7, "thief": 0.3}  # Aggressive
+            else:
+                weights = {"knight": 0.6, "squire": 0.4}    # Defensive
+    
+    # Apply history penalty
+    weights = _apply_history_penalty(weights)
+    
+    # Convert weights to arrays for selection
+    var units = []
+    var weight_values = []
+    for unit_name in weights.keys():
+        units.append(get_unit_resource(unit_name))
+        weight_values.append(weights[unit_name])
+    
+    # Weighted random selection
+    var chosen = _pick_weighted_random(units, weight_values)
+    _update_spawn_history(chosen.card_name)
+    
+    return chosen
+```
 
 #### `spawn_enemies(lanes: Array[Lane])`
 - Main entry point (called each turn)
 - Calls `choose_spawn_lane()` and `choose_enemy_unit()`
 - Respects spawn limits (2 per turn, 5 max on board)
+- Now includes randomization logic
+
+```gdscript
+func spawn_enemies(lanes: Array[Lane]):
+    var spawned_count = 0
+    var max_spawns = 2
+    
+    while spawned_count < max_spawns:
+        var lane = choose_spawn_lane(lanes)
+        if lane == null:
+            break  # No valid lanes
+        
+        var unit = choose_enemy_unit(lane)
+        if unit:
+            lane.summon_enemy_unit(unit, 2)
+            spawned_count += 1
+        else:
+            break  # No units available
+    
+    game_turn += 1
+```
 
 ---
 
@@ -314,6 +856,54 @@ Give each AI personality a character:
 
 ---
 
+## Choosing Your Approach
+
+### Quick Decision Guide
+
+**Choose DETERMINISTIC (like StS/Inscryption) if:**
+- ✅ You want a puzzle-like, skill-based experience
+- ✅ You value learnability over replayability
+- ✅ You have limited development time (simpler to implement)
+- ✅ Your game has other sources of variance (card draw, equipment drops)
+- ✅ You want players to feel like they "mastered" the AI
+
+**Choose RANDOMIZED (controlled probabilities) if:**
+- ✅ You want high replayability
+- ✅ You want each encounter to feel fresh
+- ✅ You have other deterministic elements (fixed decks, scripted events)
+- ✅ You want AI to feel "alive" rather than "programmed"
+- ✅ You're okay with occasional "unlucky" moments
+
+**Choose HYBRID (recommended for DEADHAND) if:**
+- ✅ You want best of both worlds
+- ✅ You can invest time in balancing probabilities
+- ✅ You want strategic depth AND variety
+- ✅ You want the AI to feel intelligent but not robotic
+
+### Implementation Roadmap
+
+**Phase 1: Start Deterministic (MVP)**
+- Implement 2-3 personalities with fixed patterns
+- Get the core game loop working
+- Playtest for basic balance
+
+**Phase 2: Add Controlled Randomization**
+- Convert fixed choices to weighted probabilities (60/30/10 splits)
+- Add action sets (pick from valid moves randomly)
+- Implement history tracking to prevent repetition
+
+**Phase 3: Polish with Advanced Features**
+- Add per-combat seeds for consistent replay
+- Implement personality traits/modifiers
+- Add UI indicators showing AI tendencies
+
+**Phase 4: Balance and Tune**
+- Adjust probability weights based on win rates
+- Fine-tune randomness levels (more/less variance)
+- Add difficulty modes (easy = deterministic, hard = randomized)
+
+---
+
 ## Summary
 
 This AI system provides:
@@ -322,5 +912,16 @@ This AI system provides:
 ✅ **Variety**: Random selection keeps games fresh  
 ✅ **Scalability**: Easy to add new personalities or tune existing ones  
 ✅ **Engagement**: Players feel like they're outsmarting an intelligent opponent  
+✅ **Randomization**: Controlled variance adds replayability without sacrificing strategy  
 
-The algorithmic approach is perfect for a small-scale card battler - sophisticated enough to feel smart, simple enough to implement and balance quickly.
+The **hybrid algorithmic + probabilistic approach** is perfect for a small-scale card battler:
+- Sophisticated enough to feel smart
+- Simple enough to implement and balance quickly
+- Flexible enough to tune randomness levels based on playtesting
+- Replayable enough to keep players engaged across multiple runs
+
+**Recommended Starting Point:**
+1. Implement **Aggressive** and **Defensive** personalities with **60/30/10 weighted probabilities**
+2. Add **history tracking** to prevent repetitive spawns
+3. Playtest and adjust weights until 40-60% win rate
+4. Add more personalities once core system feels good
