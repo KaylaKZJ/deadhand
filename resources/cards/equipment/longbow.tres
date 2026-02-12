@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="EquipmentCardResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_logic/equipment_card.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+card_name = "Longbow"
+card_type = "equipment"
+description = "Powerful ranged weapon. Requires both hands. +2 ATK"
+equipment_type = "weapon"
+slots_required = ["weapon", "shield"]
+attack_range = "ranged"
+hp_bonus = 0
+attack_bonus = 4

@@ -60,37 +60,54 @@ func _build_equipment_pile():
 	var axe = load("res://resources/cards/equipment/rusty_axe.tres") as EquipmentCardResource
 	var shield = load("res://resources/cards/equipment/shield.tres") as EquipmentCardResource
 	var helmet = load("res://resources/cards/equipment/helmet.tres") as EquipmentCardResource
+	var leather_helmet = load("res://resources/cards/equipment/leather_helmet.tres") as EquipmentCardResource
 	var sword = load("res://resources/cards/equipment/iron_sword.tres") as EquipmentCardResource
+	var longbow = load("res://resources/cards/equipment/longbow.tres") as EquipmentCardResource
+	var leather_armor = load("res://resources/cards/equipment/leather_armor.tres") as EquipmentCardResource
 	
 	# Add 5 Axes
 	for i in 5:
 		equipment_draw_pile.append(axe)
 	
+	# Add 5 Swords
+	for i in 5:
+		equipment_draw_pile.append(sword)
+
+	# Add 4 Longbow
+	for i in 4:
+		equipment_draw_pile.append(longbow)
+
 	# Add 5 Shields
 	for i in 5:
 		equipment_draw_pile.append(shield)
-	
+
 	# Add 3 Helmets
 	for i in 3:
 		equipment_draw_pile.append(helmet)
+		
+	# Add 3 Leather Armor
+	for i in 3:
+		equipment_draw_pile.append(leather_armor)
+
+	# Add 3 Leather Helmets
+	for i in 3:
+		equipment_draw_pile.append(leather_helmet)
 	
-	# Add 2 Swords
-	for i in 2:
-		equipment_draw_pile.append(sword)
+
 
 func _build_enemy_pile():
-	"""Build enemy pile: 8 Squires, 6 Knights, 4 Barbarians, 2 Thieves"""
+	"""Build enemy pile: 12 Squires, 2 Knights, 4 Barbarians, 2 Thieves"""
 	var squire = load("res://resources/cards/enemies/squire.tres") as BodyCardResource
 	var knight = load("res://resources/cards/enemies/knight.tres") as BodyCardResource
 	var barbarian = load("res://resources/cards/enemies/barbarian.tres") as BodyCardResource
 	var thief = load("res://resources/cards/enemies/thief.tres") as BodyCardResource
 	
-	# Add 8 Squires
-	for i in 8:
+	# Add 12 Squires
+	for i in 12:
 		enemy_draw_pile.append(squire)
 	
-	# Add 6 Knights
-	for i in 6:
+	# Add 2 Knights
+	for i in 2:
 		enemy_draw_pile.append(knight)
 	
 	# Add 4 Barbarians
