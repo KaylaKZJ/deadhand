@@ -40,8 +40,11 @@ func _ready():
 		lanes[i].set_deck_manager(deck_manager)  # Connect lanes to deck manager for discarding
 	
 	# Initialize managers
-	enemy_ai.initialize(deck_manager)
+	enemy_ai.initialize(deck_manager, combat_manager)
 	combat_manager.initialize(deck_manager, lanes, enemy_ai)
+	
+	# Link deck manager to combat manager for difficulty scaling
+	deck_manager.combat_manager = combat_manager
 	
 	# Hide draw buttons since we auto-draw now
 	body_pile_button.visible = false

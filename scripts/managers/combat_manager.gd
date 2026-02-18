@@ -18,6 +18,8 @@ enum Phase {
 
 var current_phase: Phase = Phase.DRAW
 var turn_number: int = 0
+var wave_number: int = 1  # Current wave (increases each time enemies are defeated)
+var difficulty_multiplier: float = 1.0  # Scales enemy HP/ATK each wave
 
 # Player HP
 var player_hp: int = 20
@@ -46,17 +48,24 @@ func initialize(deck_mgr: DeckManager, lane_array: Array[Lane], ai: Node):
 	lanes = lane_array
 	enemy_ai = ai
 	
+	# If enemy_ai is EnemyAI class, pass self reference for HP tracking
+	if enemy_ai is EnemyAI:
+		enemy_ai.combat_manager = self
+	
 	print("CombatManager initialized with %d lanes" % lanes.size())
 
 func start_game():
 	"""Begin the first turn"""
 	turn_number = 0
+	wave_number = 1
+	difficulty_multiplier = 1.0
 	player_hp = max_player_hp
 	enemy_hp = max_enemy_hp
 	
-	# Draw initial hand: 2 body cards, 3 equipment cards
+	# Draw initial hand: 3 body cards, 4 equipment cards
 	print("\n\n========== GAME START ==========")
-	print("Drawing initial hand: 2 body + 3 equipment cards")
+	print("🌊 WAVE %d | Difficulty: %.1fx" % [wave_number, difficulty_multiplier])
+	print("Drawing initial hand: 3 body + 4 equipment cards")
 	_draw_initial_hand()
 	
 	# Start with enemy turn (cleanup phase to spawn enemies)
@@ -83,17 +92,19 @@ func start_turn():
 	enter_play_phase()
 
 func _auto_draw_hand():
-	"""Auto-draw cards to fill hand to 5 cards (mix of body and equipment)"""
+	"""Auto-draw cards to fill hand to 7 cards (mix of body and equipment)"""
 	var cards_needed = deck_manager.MAX_HAND_SIZE - deck_manager.hand.size()
 	
-	# Draw alternating body and equipment cards to fill hand
+	# Draw cards with 3:4 body:equipment ratio
+	# Pattern: B-E-B-E-B-E-E for initial 7 cards
 	for i in cards_needed:
 		var card
-		if i % 2 == 0:
-			# Draw body card
+		# First 5 cards alternate (B-E-B-E-B), last 2 are equipment (E-E)
+		if i < 5 and i % 2 == 0:
+			# Draw body card (positions 0, 2, 4)
 			card = deck_manager._draw_single_card(deck_manager.body_draw_pile, deck_manager.body_discard_pile)
 		else:
-			# Draw equipment card
+			# Draw equipment card (positions 1, 3, 5, 6)
 			card = deck_manager._draw_single_card(deck_manager.equipment_draw_pile, deck_manager.equipment_discard_pile)
 		
 		if card:
@@ -272,8 +283,36 @@ func enter_cleanup_phase():
 	start_turn()
 
 func check_win_condition() -> bool:
-	"""Check if player has won (enemy HP reaches 0)"""
-	return enemy_hp <= 0
+	"""Check if player has defeated all enemies (completed wave)"""
+	if enemy_hp <= 0:
+		_start_next_wave()
+		return false  # Don't end game, continue to next wave
+	return false
+
+func _start_next_wave():
+	"""Start the next wave with increased difficulty"""
+	wave_number += 1
+	difficulty_multiplier += 0.15  # +15% difficulty per wave
+	
+	# Reset enemy HP to max
+	enemy_hp = max_enemy_hp
+	
+	# Clear remaining enemies from board
+	for lane in lanes:
+		for slot in [lane.enemy_slot_1, lane.enemy_slot_2]:
+			if slot.current_unit:
+				slot.current_unit.queue_free()
+				slot.current_unit = null
+	
+	print("\n\n🎉 WAVE %d COMPLETE! 🎉" % (wave_number - 1))
+	print("🌊 Starting WAVE %d | Difficulty: %.1fx (Enemies get +%.0f%% HP/ATK)" % [wave_number, difficulty_multiplier, (difficulty_multiplier - 1.0) * 100])
+	print("💚 Player HP restored to %d" % max_player_hp)
+	
+	# Optional: Restore some player HP between waves
+	player_hp = min(player_hp + 5, max_player_hp)  # Heal 5 HP between waves
+	
+	# Continue gameplay - don't emit game_won
+	# The cleanup phase will spawn new enemies with scaled stats
 
 func check_loss_condition() -> bool:
 	"""Check if player has lost (HP reaches 0)"""
