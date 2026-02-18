@@ -26,6 +26,7 @@ var occupied_slots: Array[String] = []  # Track which slot types are currently u
 var is_player_unit: bool = true
 var lane_index: int = -1
 var column_position: int = -1  # 0=player, 1=enemy battle, 2=enemy spawn
+var enemy_level: int = 1  # For enemy units, shows wave difficulty
 
 # UI references
 @onready var hp_label: Label = $HPLabel
@@ -36,12 +37,13 @@ var column_position: int = -1  # 0=player, 1=enemy battle, 2=enemy spawn
 
 var original_bg_color: Color
 
-func initialize(data: BodyCardResource, is_player: bool, lane: int, column: int = 0):
+func initialize(data: BodyCardResource, is_player: bool, lane: int, column: int = 0, level: int = 1):
 	"""Set up unit with card data"""
 	card_data = data
 	is_player_unit = is_player
 	lane_index = lane
 	column_position = column
+	enemy_level = level
 	
 	# Set base stats
 	base_hp = data.hp
@@ -54,9 +56,12 @@ func initialize(data: BodyCardResource, is_player: bool, lane: int, column: int 
 	max_hp = base_hp
 	current_attack = base_attack
 	
-	# Set unit name
+	# Set unit name with level for enemies
 	if unit_name_label:
-		unit_name_label.text = card_data.card_name
+		if is_player_unit:
+			unit_name_label.text = card_data.card_name
+		else:
+			unit_name_label.text = "Lvl %d %s" % [enemy_level, card_data.card_name]
 	
 	# Set background color based on owner
 	if background:

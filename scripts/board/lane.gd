@@ -55,14 +55,14 @@ func summon_player_unit(unit_data: BodyCardResource) -> Unit:
 	unit_summoned.emit(unit, true, 0)
 	return unit
 
-func summon_enemy_unit(unit_data: BodyCardResource, column: int = 2) -> Unit:
+func summon_enemy_unit(unit_data: BodyCardResource, column: int = 2, level: int = 1) -> Unit:
 	"""Summon an enemy unit to specified column (default: column 2 = spawn position)"""
 	if column == 2:
 		if column_2_unit != null:
 			print("Lane %d already has an enemy unit in column 2!" % lane_index)
 			return null
 		
-		var unit = _create_unit(unit_data, false, 2)
+		var unit = _create_unit(unit_data, false, 2, level)
 		column_2_unit = unit
 		
 		# Visual spawn effect - flash the unit
@@ -80,7 +80,7 @@ func summon_enemy_unit(unit_data: BodyCardResource, column: int = 2) -> Unit:
 			print("Lane %d already has an enemy unit in column 1!" % lane_index)
 			return null
 		
-		var unit = _create_unit(unit_data, false, 1)
+		var unit = _create_unit(unit_data, false, 1, level)
 		column_1_unit = unit
 		unit_summoned.emit(unit, false, 1)
 		return unit
@@ -88,7 +88,7 @@ func summon_enemy_unit(unit_data: BodyCardResource, column: int = 2) -> Unit:
 		print("ERROR: Cannot summon enemy to column %d" % column)
 		return null
 
-func _create_unit(unit_data: BodyCardResource, is_player: bool, column: int) -> Unit:
+func _create_unit(unit_data: BodyCardResource, is_player: bool, column: int, level: int = 1) -> Unit:
 	"""Create a unit instance in the specified column"""
 	# Load unit scene
 	var unit_scene = load("res://scenes/cards/unit_on_board.tscn")
@@ -115,7 +115,7 @@ func _create_unit(unit_data: BodyCardResource, is_player: bool, column: int) -> 
 			unit.position = Vector2(0, -200)  # Enemy spawn column (top)
 	
 	add_child(unit)
-	unit.initialize(unit_data, is_player, lane_index, column)
+	unit.initialize(unit_data, is_player, lane_index, column, level)
 	unit.died.connect(_on_unit_died)
 	
 	return unit
@@ -199,8 +199,8 @@ func resolve_combat():
 			await column_1_unit.play_attack_animation()
 			overflow_to_player = column_1_unit.current_attack
 	
-	# If player unit exists but found no target in any column - direct damage to enemy HP
-	if column_0_unit and not column_1_unit and not column_2_unit and not combat_happened:
+	# If player unit exists but didn't engage in combat - direct damage to enemy HP
+	if column_0_unit and not combat_happened:
 		print("Lane %d: %s attacks enemy directly for %d damage!" % [lane_index, column_0_unit.card_data.card_name, column_0_unit.current_attack])
 		await column_0_unit.play_attack_animation()
 		overflow_to_enemy = column_0_unit.current_attack
@@ -228,6 +228,10 @@ func advance_enemies():
 func has_player_unit() -> bool:
 	"""Check if there's a player unit in this lane"""
 	return column_0_unit != null
+
+func get_player_unit() -> Unit:
+	"""Get player unit in column 0"""
+	return column_0_unit
 
 func has_enemy_unit() -> bool:
 	"""Check if there's an enemy unit in this lane (any column)"""
