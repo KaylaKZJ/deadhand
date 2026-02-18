@@ -8,6 +8,6 @@ card_name = "Thief"
 card_type = "enemy"
 description = "Quick attacker with moderate stats."
 hp = 7
-attack = 2
+attack = 3
 equipment_slots = 0
 slot_types = Array[String]([])
