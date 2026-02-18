@@ -760,24 +760,6 @@ func spawn_enemies(lanes: Array[Lane]):
 
 ---
 
-## UI Integration
-
-### Personality Indicator (Top of Screen)
-Display current AI personality to help players learn:
-- "Enemy Strategy: AGGRESSIVE" (red text)
-- "Enemy Strategy: DEFENSIVE" (blue text)
-- "Enemy Strategy: MIRROR" (purple text)
-- etc.
-
-### Intent System (Optional - Advanced)
-Like Slay the Spire, show what enemy will do next turn:
-- "Planning to spawn in lanes: 2, 4"
-- "Targeting: High-attack units"
-
-This requires adding a "telegraph" phase before actual spawning.
-
----
-
 ## Balancing Considerations
 
 ### AI Strength Ranking (Estimated)
