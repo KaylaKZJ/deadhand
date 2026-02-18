@@ -2,6 +2,9 @@ extends Node
 class_name DeckManager
 ## Manages two separate draw piles (Body and Equipment) and player's hand
 
+# ============ GAME MODE FLAGS ============
+const SKELETONS_ONLY: bool = true  # Set to false to include Zombies and Ghosts
+
 signal cards_drawn(cards: Array[CardBase])
 signal hand_updated(hand: Array[CardBase])
 
@@ -17,7 +20,10 @@ var enemy_discard_pile: Array[BodyCardResource] = []
 
 # Player's hand
 var hand: Array[CardBase] = []
-const MAX_HAND_SIZE: int = 5
+const MAX_HAND_SIZE: int = 7
+
+# Reference to combat manager for difficulty scaling
+var combat_manager = null  # Will be set by main.gd
 
 func _ready():
 	initialize_decks()
@@ -39,21 +45,28 @@ func initialize_decks():
 	print("  Enemy pile: %d cards" % enemy_draw_pile.size())
 
 func _build_body_pile():
-	"""Build body pile: 6 Skeletons, 3 Zombies, 1 Ghost"""
+	"""Build body pile: 6 Skeletons, 3 Zombies, 1 Ghost (or 10 Skeletons if SKELETONS_ONLY)"""
 	var skeleton = load("res://resources/cards/bodies/skeleton.tres") as BodyCardResource
-	var zombie = load("res://resources/cards/bodies/zombie.tres") as BodyCardResource
-	var ghost = load("res://resources/cards/bodies/ghost.tres") as BodyCardResource
 	
-	# Add 6 Skeletons
-	for i in 6:
-		body_draw_pile.append(skeleton)
-	
-	# Add 3 Zombies
-	for i in 3:
-		body_draw_pile.append(zombie)
-	
-	# Add 1 Ghost
-	body_draw_pile.append(ghost)
+	if SKELETONS_ONLY:
+		# Skeletons only mode: 10 Skeletons
+		for i in 10:
+			body_draw_pile.append(skeleton)
+	else:
+		# Original mix: 6 Skeletons, 3 Zombies, 1 Ghost
+		var zombie = load("res://resources/cards/bodies/zombie.tres") as BodyCardResource
+		var ghost = load("res://resources/cards/bodies/ghost.tres") as BodyCardResource
+		
+		# Add 6 Skeletons
+		for i in 6:
+			body_draw_pile.append(skeleton)
+		
+		# Add 3 Zombies
+		for i in 3:
+			body_draw_pile.append(zombie)
+		
+		# Add 1 Ghost
+		body_draw_pile.append(ghost)
 
 func _build_equipment_pile():
 	"""Build equipment pile: 5 Axes, 5 Shields, 3 Helmets, 2 Swords"""
@@ -148,8 +161,21 @@ func draw_from_pile(pile_type: String) -> Array[CardBase]:
 	return drawn_cards
 
 func draw_enemy_card() -> BodyCardResource:
-	"""Draw 1 card from enemy pile"""
-	return _draw_single_card(enemy_draw_pile, enemy_discard_pile)
+	"""Draw 1 card from enemy pile and apply difficulty scaling"""
+	var card = _draw_single_card(enemy_draw_pile, enemy_discard_pile)
+	
+	if card and combat_manager:
+		# Create a duplicate to avoid modifying the original resource
+		var scaled_card = card.duplicate(true)
+		
+		# Apply difficulty multiplier to stats
+		var multiplier = combat_manager.difficulty_multiplier
+		scaled_card.hp = int(ceil(card.hp * multiplier))
+		scaled_card.attack = int(ceil(card.attack * multiplier))
+		
+		return scaled_card
+	
+	return card
 
 func _draw_single_card(draw_pile: Array, discard_pile: Array):
 	"""Draw one card from a pile, reshuffling discard if needed"""
