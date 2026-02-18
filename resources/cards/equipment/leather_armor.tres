@@ -6,7 +6,7 @@
 script = ExtResource("1")
 card_name = "Leather Armor"
 card_type = "equipment"
-description = "Basic protective gear. +1 HP"
+description = "Basic protective gear. +4 HP"
 equipment_type = "armor"
-hp_bonus = 2
+hp_bonus = 4
 attack_bonus = 0
