@@ -16,6 +16,7 @@ var column_1_unit: Unit = null  # Enemy in battle position
 var column_2_unit: Unit = null  # Enemy in spawn position
 
 var deck_manager: DeckManager = null  # Reference to deck manager for discarding
+var combat_manager: CombatManager = null  # Reference for passing to units
 
 # References to spawn positions
 @onready var column_0_spawn: Marker2D = $Column0Spawn  # Player spawn (bottom)
@@ -36,6 +37,10 @@ func set_lane_index(index: int):
 func set_deck_manager(deck_mgr: DeckManager):
 	"""Set reference to deck manager for discarding cards"""
 	deck_manager = deck_mgr
+
+func set_combat_manager(combat_mgr: CombatManager):
+	"""Set reference to combat manager (passed to units for stat bonuses)"""
+	combat_manager = combat_mgr
 
 func summon_player_unit(unit_data: BodyCardResource) -> Unit:
 	"""Summon a player unit to column 0 (player position)"""
@@ -115,7 +120,7 @@ func _create_unit(unit_data: BodyCardResource, is_player: bool, column: int, lev
 			unit.position = Vector2(0, -200)  # Enemy spawn column (top)
 	
 	add_child(unit)
-	unit.initialize(unit_data, is_player, lane_index, column, level)
+	unit.initialize(unit_data, is_player, lane_index, column, level, combat_manager)
 	unit.died.connect(_on_unit_died)
 	
 	return unit
@@ -201,9 +206,9 @@ func resolve_combat():
 	
 	# If player unit exists but didn't engage in combat - direct damage to enemy HP
 	if column_0_unit and not combat_happened:
-		print("Lane %d: %s attacks enemy directly for %d damage!" % [lane_index, column_0_unit.card_data.card_name, column_0_unit.current_attack])
+		print("Lane %d: %s attacks enemy directly for %d damage!" % [lane_index, column_0_unit.card_data.card_name, column_0_unit.get_total_attack()])
 		await column_0_unit.play_attack_animation()
-		overflow_to_enemy = column_0_unit.current_attack
+		overflow_to_enemy = column_0_unit.get_total_attack()
 	
 	return [overflow_to_player, overflow_to_enemy]
 

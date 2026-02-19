@@ -25,6 +25,10 @@ extends Node2D
 @onready var game_over_panel: Panel = $UI/GameOverPanel
 @onready var game_over_label: Label = $UI/GameOverPanel/VBoxContainer/GameOverLabel
 @onready var restart_button: Button = $UI/GameOverPanel/VBoxContainer/RestartButton
+@onready var stat_button: Button = $UI/StatButton
+@onready var level_label: Label = $UI/LevelLabel
+@onready var xp_label: Label = $UI/XPLabel
+@onready var stat_panel: StatPanel = $UI/StatPanel
 
 var lanes: Array[Lane] = []
 var card_displays: Array[CardDisplay] = []
@@ -37,7 +41,11 @@ func _ready():
 	lanes = [lane_1, lane_2, lane_3, lane_4, lane_5]
 	for i in range(lanes.size()):
 		lanes[i].set_lane_index(i)
-		lanes[i].set_deck_manager(deck_manager)  # Connect lanes to deck manager for discarding
+		lanes[i].set_deck_manager(deck_manager)
+		lanes[i].set_combat_manager(combat_manager)
+	
+	# Add combat_manager to group so CardDisplay and StatPanel can find it
+	combat_manager.add_to_group("combat_manager")
 	
 	# Initialize managers
 	enemy_ai.initialize(deck_manager, combat_manager)
@@ -55,12 +63,17 @@ func _ready():
 	equipment_pile_button.pressed.connect(_on_equipment_pile_pressed)
 	end_turn_button.pressed.connect(_on_end_turn_pressed)
 	restart_button.pressed.connect(_on_restart_pressed)
+	stat_button.pressed.connect(_on_stat_button_pressed)
 	
 	deck_manager.hand_updated.connect(_on_hand_updated)
 	combat_manager.turn_started.connect(_on_turn_started)
 	combat_manager.phase_changed.connect(_on_phase_changed)
 	combat_manager.game_won.connect(_on_game_won)
 	combat_manager.game_lost.connect(_on_game_lost)
+	combat_manager.level_up.connect(_on_level_up)
+	combat_manager.xp_gained.connect(_on_xp_gained)
+	combat_manager.stat_allocated.connect(_on_stat_allocated)
+	stat_panel.stat_preview_changed.connect(_on_stat_preview_changed)
 	
 	# Hide game over panel initially
 	game_over_panel.visible = false
@@ -72,6 +85,8 @@ func _ready():
 	_update_hp_display()
 	_update_enemy_hp_display()
 	_update_enemy_deck_display()
+	_update_xp_display()
+	_update_stat_button()
 
 func _process(_delta):
 	"""Update highlighting for equipment targeting"""
@@ -145,6 +160,7 @@ func _on_hand_updated(hand: Array[CardBase]):
 	var card_display_scene = load("res://scenes/cards/card_display.tscn")
 	for card in hand:
 		var card_display: CardDisplay = card_display_scene.instantiate()
+		card_display.set_combat_manager(combat_manager)
 		hand_container.add_child(card_display)
 		card_display.set_card_data(card)
 		card_display.card_selected.connect(_on_card_selected)
@@ -246,6 +262,8 @@ func _on_phase_changed(phase: String):
 	_update_hp_display()
 	_update_enemy_hp_display()
 	_update_enemy_deck_display()
+	_update_xp_display()
+	_update_stat_button()
 	
 	# Enable/disable buttons based on phase (draw buttons always disabled now)
 	match phase:
@@ -316,3 +334,51 @@ func _update_enemy_hp_display():
 			enemy_hp_label.add_theme_color_override("font_color", Color.YELLOW)
 		else:
 			enemy_hp_label.add_theme_color_override("font_color", Color.WHITE)
+
+func _update_xp_display():
+	"""Update level and XP labels"""
+	if not combat_manager:
+		return
+	if level_label:
+		level_label.text = "Lv.%d" % combat_manager.player_level
+	if xp_label:
+		var xp_to_next = combat_manager._xp_for_next_level()
+		xp_label.text = "XP: %d/%d" % [combat_manager.player_xp, combat_manager.player_xp + xp_to_next]
+
+func _update_stat_button():
+	"""Glow the stat button when unspent points are available"""
+	if not stat_button:
+		return
+	var pts = combat_manager.unspent_stat_points if combat_manager else 0
+	if pts > 0:
+		stat_button.text = "Stats (%d)" % pts
+		stat_button.add_theme_color_override("font_color", Color.YELLOW)
+	else:
+		stat_button.text = "Stats"
+		stat_button.remove_theme_color_override("font_color")
+
+func _on_stat_button_pressed():
+	"""Open the stat allocation panel"""
+	if stat_panel:
+		stat_panel.open_panel()
+
+func _on_level_up(new_level: int, _stat_points: int):
+	"""Handle level-up event"""
+	print("UI: Level up to %d!" % new_level)
+	_update_xp_display()
+	_update_stat_button()
+	_update_hp_display()
+
+func _on_xp_gained(_amount: int, _current_xp: int, _xp_to_next: int):
+	"""Handle XP gain"""
+	_update_xp_display()
+
+func _on_stat_allocated(_stat_name: String, _new_value: int):
+	"""Handle stat allocation - refresh buttons and HP display"""
+	_update_stat_button()
+	_update_hp_display()
+
+func _on_stat_preview_changed(staged_atk: int, staged_def: int, staged_vit: int):
+	"""Forward StatPanel preview to all cards currently in hand"""
+	for card_display in card_displays:
+		card_display._on_stat_preview_changed(staged_atk, staged_def, staged_vit)

@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3 uid="uid://main_scene"]
+[gd_scene load_steps=7 format=3 uid="uid://main_scene"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/managers/deck_manager.gd" id="2"]
 [ext_resource type="Script" path="res://scripts/managers/combat_manager.gd" id="3"]
 [ext_resource type="Script" path="res://scripts/managers/enemy_ai.gd" id="4"]
 [ext_resource type="PackedScene" uid="uid://lane_scene_123" path="res://scenes/lane.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://scenes/ui/stat_panel.tscn" id="6"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1")
@@ -137,6 +138,32 @@ grow_vertical = 0
 disabled = true
 text = "END TURN"
 theme_override_font_sizes/font_size = 20
+
+[node name="LevelLabel" type="Label" parent="UI"]
+offset_left = 20.0
+offset_top = 145.0
+offset_right = 160.0
+offset_bottom = 170.0
+text = "Lv.1"
+theme_override_font_sizes/font_size = 18
+
+[node name="XPLabel" type="Label" parent="UI"]
+offset_left = 20.0
+offset_top = 172.0
+offset_right = 220.0
+offset_bottom = 195.0
+text = "XP: 0/100"
+theme_override_font_sizes/font_size = 16
+
+[node name="StatButton" type="Button" parent="UI"]
+offset_left = 20.0
+offset_top = 200.0
+offset_right = 160.0
+offset_bottom = 235.0
+text = "Stats"
+theme_override_font_sizes/font_size = 16
+
+[node name="StatPanel" parent="UI" instance=ExtResource("6")]
 
 [node name="GameOverPanel" type="Panel" parent="UI"]
 anchors_preset = 15
