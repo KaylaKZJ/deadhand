@@ -1,0 +1,158 @@
+[gd_scene load_steps=2 format=3 uid="uid://stat_panel"]
+
+[ext_resource type="Script" path="res://scripts/ui/stat_panel.gd" id="1_stat_panel"]
+
+[node name="StatPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("1_stat_panel")
+
+[node name="DimBackground" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0.6)
+mouse_filter = 0
+
+[node name="PanelContainer" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -180.0
+offset_top = -200.0
+offset_right = 180.0
+offset_bottom = 200.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleLabel" type="Label" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+text = "── STAT ALLOCATION ──"
+horizontal_alignment = 1
+
+[node name="HeaderRow" type="HBoxContainer" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="LevelLabel" type="Label" parent="PanelContainer/VBoxContainer/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Level: 1"
+
+[node name="UnspentLabel" type="Label" parent="PanelContainer/VBoxContainer/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Points: 0"
+horizontal_alignment = 2
+
+[node name="HSeparator" type="HSeparator" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ATKRow" type="VBoxContainer" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ATKButtonRow" type="HBoxContainer" parent="PanelContainer/VBoxContainer/ATKRow"]
+layout_mode = 2
+
+[node name="ATKMinus" type="Button" parent="PanelContainer/VBoxContainer/ATKRow/ATKButtonRow"]
+layout_mode = 2
+text = "-"
+custom_minimum_size = Vector2(30, 0)
+
+[node name="ATKValue" type="Label" parent="PanelContainer/VBoxContainer/ATKRow/ATKButtonRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "ATK:  0"
+horizontal_alignment = 1
+
+[node name="ATKPlus" type="Button" parent="PanelContainer/VBoxContainer/ATKRow/ATKButtonRow"]
+layout_mode = 2
+text = "+"
+custom_minimum_size = Vector2(30, 0)
+
+[node name="ATKEffect" type="Label" parent="PanelContainer/VBoxContainer/ATKRow"]
+layout_mode = 2
+text = "+0 dmg to all units"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 11
+
+[node name="DEFRow" type="VBoxContainer" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="DEFButtonRow" type="HBoxContainer" parent="PanelContainer/VBoxContainer/DEFRow"]
+layout_mode = 2
+
+[node name="DEFMinus" type="Button" parent="PanelContainer/VBoxContainer/DEFRow/DEFButtonRow"]
+layout_mode = 2
+text = "-"
+custom_minimum_size = Vector2(30, 0)
+
+[node name="DEFValue" type="Label" parent="PanelContainer/VBoxContainer/DEFRow/DEFButtonRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "DEF:  0"
+horizontal_alignment = 1
+
+[node name="DEFPlus" type="Button" parent="PanelContainer/VBoxContainer/DEFRow/DEFButtonRow"]
+layout_mode = 2
+text = "+"
+custom_minimum_size = Vector2(30, 0)
+
+[node name="DEFEffect" type="Label" parent="PanelContainer/VBoxContainer/DEFRow"]
+layout_mode = 2
+text = "0% dmg reduction"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 11
+
+[node name="VITRow" type="VBoxContainer" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="VITButtonRow" type="HBoxContainer" parent="PanelContainer/VBoxContainer/VITRow"]
+layout_mode = 2
+
+[node name="VITMinus" type="Button" parent="PanelContainer/VBoxContainer/VITRow/VITButtonRow"]
+layout_mode = 2
+text = "-"
+custom_minimum_size = Vector2(30, 0)
+
+[node name="VITValue" type="Label" parent="PanelContainer/VBoxContainer/VITRow/VITButtonRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "VIT:  0"
+horizontal_alignment = 1
+
+[node name="VITPlus" type="Button" parent="PanelContainer/VBoxContainer/VITRow/VITButtonRow"]
+layout_mode = 2
+text = "+"
+custom_minimum_size = Vector2(30, 0)
+
+[node name="VITEffect" type="Label" parent="PanelContainer/VBoxContainer/VITRow"]
+layout_mode = 2
+text = "Max HP = 20"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 11
+
+[node name="HSeparator2" type="HSeparator" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ButtonRow" type="HBoxContainer" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="ApplyButton" type="Button" parent="PanelContainer/VBoxContainer/ButtonRow"]
+layout_mode = 2
+text = "Apply"
+disabled = true
+
+[node name="CancelButton" type="Button" parent="PanelContainer/VBoxContainer/ButtonRow"]
+layout_mode = 2
+text = "Cancel"
