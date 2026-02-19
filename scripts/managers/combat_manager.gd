@@ -1,12 +1,15 @@
 extends Node
 class_name CombatManager
-## Manages combat flow, turn phases, and win/loss conditions
+## Manages combat flow, turn phases, win/loss conditions, and player XP/stat progression
 
 signal turn_started(turn_number: int)
 signal phase_changed(phase: String)
 signal combat_resolved()
 signal game_won()
 signal game_lost()
+signal level_up(new_level: int, stat_points_gained: int)
+signal xp_gained(amount: int, current_xp: int, xp_for_next_level: int)
+signal stat_allocated(stat_name: String, new_value: int)
 
 enum Phase {
 	DRAW,
@@ -28,6 +31,15 @@ var max_player_hp: int = 20
 # Enemy HP
 var enemy_hp: int = 40
 var max_enemy_hp: int = 40
+
+# Player progression
+var player_xp: int = 0
+var player_level: int = 1
+var player_atk: int = 0
+var player_def: int = 0
+var player_vit: int = 0
+var unspent_stat_points: int = 0
+var enemies_killed_this_wave: int = 0  # For future stats/achievements
 
 # References
 var deck_manager: DeckManager
@@ -51,6 +63,10 @@ func initialize(deck_mgr: DeckManager, lane_array: Array[Lane], ai: Node):
 	# If enemy_ai is EnemyAI class, pass self reference for HP tracking
 	if enemy_ai is EnemyAI:
 		enemy_ai.combat_manager = self
+	
+	# Connect lane unit_died signals to award XP for enemy kills
+	for lane in lanes:
+		lane.unit_died.connect(_on_unit_died_in_lane)
 	
 	print("CombatManager initialized with %d lanes" % lanes.size())
 
@@ -293,6 +309,7 @@ func _start_next_wave():
 	"""Start the next wave with increased difficulty"""
 	wave_number += 1
 	difficulty_multiplier += 0.15  # +15% difficulty per wave
+	enemies_killed_this_wave = 0
 	
 	# Reset enemy HP to max
 	enemy_hp = max_enemy_hp
@@ -349,3 +366,101 @@ func get_current_phase_name() -> String:
 			return "CLEANUP"
 		_:
 			return "UNKNOWN"
+
+# ============ XP & PROGRESSION ============
+
+func award_xp(amount: int) -> void:
+	"""Award XP to the player and check for level-up"""
+	player_xp += amount
+	print("⭐ +%d XP! Total: %d XP" % [amount, player_xp])
+	xp_gained.emit(amount, player_xp, _xp_for_next_level())
+	_check_level_up()
+
+func _check_level_up() -> void:
+	"""Check if accumulated XP triggers a level-up"""
+	var threshold = _xp_threshold_for_level(player_level)
+	while player_xp >= threshold:
+		player_level += 1
+		unspent_stat_points += 3
+		# Full heal on level-up
+		player_hp = max_player_hp
+		print("🎉 LEVEL UP! Now level %d | HP fully restored | +3 stat points" % player_level)
+		level_up.emit(player_level, 3)
+		phase_changed.emit("HP_UPDATE")
+		threshold = _xp_threshold_for_level(player_level)
+
+func _xp_threshold_for_level(level: int) -> int:
+	"""Total XP required to have reached the given level"""
+	# Level 1→2: 100, Level 2→3: 300, Level 3→4: 600 ...
+	# Sum of 100*N for N in 1..level-1
+	var total = 0
+	for n in range(1, level):
+		total += 100 * n
+	return total
+
+func _xp_for_next_level() -> int:
+	"""XP needed to reach the next level from the current one"""
+	return _xp_threshold_for_level(player_level + 1) - player_xp
+
+func allocate_stat(stat_name: String, amount: int) -> bool:
+	"""Spend stat points. Returns true if successful."""
+	if amount <= 0 or amount > unspent_stat_points:
+		print("CombatManager: Cannot allocate %d points (available: %d)" % [amount, unspent_stat_points])
+		return false
+	
+	match stat_name:
+		"atk":
+			player_atk += amount
+			unspent_stat_points -= amount
+			print("📈 ATK increased to %d" % player_atk)
+			stat_allocated.emit("atk", player_atk)
+		"def":
+			player_def += amount
+			unspent_stat_points -= amount
+			print("🛡️ DEF increased to %d" % player_def)
+			stat_allocated.emit("def", player_def)
+		"vit":
+			var hp_gain = amount * 2
+			player_vit += amount
+			max_player_hp += hp_gain
+			player_hp = min(player_hp + hp_gain, max_player_hp)
+			unspent_stat_points -= amount
+			print("❤️ VIT increased to %d | Max HP now %d" % [player_vit, max_player_hp])
+			stat_allocated.emit("vit", player_vit)
+			phase_changed.emit("HP_UPDATE")
+		_:
+			print("CombatManager: Unknown stat '%s'" % stat_name)
+			return false
+	
+	return true
+
+func get_player_stats() -> Dictionary:
+	"""Returns current player progression stats"""
+	return {
+		"level": player_level,
+		"xp": player_xp,
+		"xp_to_next": _xp_for_next_level(),
+		"atk": player_atk,
+		"def": player_def,
+		"vit": player_vit,
+		"unspent_points": unspent_stat_points
+	}
+
+func _input(event: InputEvent) -> void:
+	"""Debug shortcuts (only in debug builds)"""
+	if not OS.is_debug_build():
+		return
+	if event.is_action_pressed("debug_add_xp"):
+		award_xp(100)
+	if event.is_action_pressed("debug_reset_stats"):
+		player_atk = 0
+		player_def = 0
+		player_vit = 0
+		unspent_stat_points = 0
+		print("🔧 Debug: Stats reset")
+
+func _on_unit_died_in_lane(unit: Unit, is_player_unit: bool) -> void:
+	"""Award XP when an enemy unit dies"""
+	if not is_player_unit:
+		enemies_killed_this_wave += 1
+		award_xp(10)
