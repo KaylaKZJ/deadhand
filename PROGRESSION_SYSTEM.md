@@ -121,7 +121,7 @@ extends EquipmentCardResource
 
 @export var display_name = "Great Axe"
 @export var equipment_type = "weapon"
-@export var hp_bonus = 0
+@export var def_bonus = 0
 @export var attack_bonus = 6
 @export var slots_required = ["weapon", "shield"]  # 2-handed
 
@@ -407,7 +407,7 @@ var strength_bonus: int:
 		return strength - 1  # 0/1/2/3 bonus damage
 
 # HP bonus applied to deployed bodies from vitality
-var vitality_hp_bonus: int:
+var vitality_def_bonus: int:
 	get:
 		return (vitality - 1) * 2  # 0/2/4/6 bonus HP per body
 

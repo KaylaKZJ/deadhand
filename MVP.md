@@ -108,7 +108,7 @@ extends CardBase
 class_name EquipmentCardResource
 
 @export var equipment_type: String  # "weapon" or "armor"
-@export var hp_bonus: int = 0
+@export var def_bonus: int = 0
 @export var attack_bonus: int = 0
 ```
 
