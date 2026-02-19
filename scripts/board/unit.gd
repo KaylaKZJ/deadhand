@@ -28,6 +28,9 @@ var lane_index: int = -1
 var column_position: int = -1  # 0=player, 1=enemy battle, 2=enemy spawn
 var enemy_level: int = 1  # For enemy units, shows wave difficulty
 
+# Reference to combat manager for player stat bonuses
+var combat_manager: CombatManager = null
+
 # UI references
 @onready var hp_label: Label = $HPLabel
 @onready var attack_label: Label = $ATKLabel
@@ -37,13 +40,14 @@ var enemy_level: int = 1  # For enemy units, shows wave difficulty
 
 var original_bg_color: Color
 
-func initialize(data: BodyCardResource, is_player: bool, lane: int, column: int = 0, level: int = 1):
+func initialize(data: BodyCardResource, is_player: bool, lane: int, column: int = 0, level: int = 1, combat_mgr: CombatManager = null):
 	"""Set up unit with card data"""
 	card_data = data
 	is_player_unit = is_player
 	lane_index = lane
 	column_position = column
 	enemy_level = level
+	combat_manager = combat_mgr
 	
 	# Set base stats
 	base_hp = data.hp
@@ -111,54 +115,59 @@ func equip(item: EquipmentCardResource) -> bool:
 
 func update_stats():
 	"""Recalculate current stats from base + equipment"""
-	var hp_bonus = 0
 	var attack_bonus = 0
+	var def_bonus = 0
 	
 	# Reset to melee by default
 	attack_range = "melee"
 	
 	for item in equipped_items:
-		hp_bonus += item.hp_bonus
 		attack_bonus += item.attack_bonus
-		
-		# Check if any equipped weapon is ranged
+		def_bonus += item.def_bonus
 		if item.attack_range == "ranged":
 			attack_range = "ranged"
 	
-	# Update max HP and current HP
+	# HP = body base + armor def_bonus + player DEF stat (if player unit)
 	var old_max_hp = max_hp
-	max_hp = base_hp + hp_bonus
+	var player_def_bonus = 0
+	if is_player_unit and combat_manager and def_bonus > 0:
+		player_def_bonus = combat_manager.player_def
+	max_hp = base_hp + def_bonus + player_def_bonus
 	
-	# If max HP increased, heal by the difference
+	# Heal by the difference if max HP increased
 	if max_hp > old_max_hp:
 		current_hp += (max_hp - old_max_hp)
 	
-	# Update attack
 	current_attack = base_attack + attack_bonus
 	
 	stats_changed.emit(self)
 	update_display()
 
+func get_total_attack() -> int:
+	"""Get attack value including player ATK bonus"""
+	if is_player_unit and combat_manager:
+		return current_attack + combat_manager.player_atk
+	return current_attack
+
 func take_damage(amount: int):
 	"""Apply damage to this unit"""
 	current_hp -= amount
-	print("%s took %d damage! (%d HP remaining)" % [card_data.card_name, amount, current_hp])
-	
+	print("%s took %d damage! (%d/%d HP remaining)" % [card_data.card_name, amount, current_hp, max_hp])
 	update_display()
-	
 	if current_hp <= 0:
 		die()
 
 func attack_target(target: Unit):
 	"""Attack another unit with animation"""
 	if target:
-		print("%s attacks %s for %d damage!" % [card_data.card_name, target.card_data.card_name, current_attack])
+		var total_atk = get_total_attack()
+		print("%s attacks %s for %d damage!" % [card_data.card_name, target.card_data.card_name, total_atk])
 		
 		# Play attack animation
 		await play_attack_animation(target)
 		
 		# Deal damage after animation
-		target.take_damage(current_attack)
+		target.take_damage(total_atk)
 
 func play_attack_animation(target: Unit = null):
 	"""Animate the unit lunging toward the target (or forward if no target) and back"""
@@ -209,7 +218,7 @@ func update_display():
 		hp_label.text = "HP: %d/%d" % [current_hp, max_hp]
 	
 	if attack_label:
-		attack_label.text = "ATK: %d" % current_attack
+		attack_label.text = "ATK: %d" % get_total_attack()
 	
 	# Update equipment display (simple text for MVP)
 	if equipped_items.size() > 0:
