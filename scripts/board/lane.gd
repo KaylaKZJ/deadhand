@@ -18,6 +18,9 @@ var column_2_unit: Unit = null  # Enemy in spawn position
 var deck_manager: DeckManager = null  # Reference to deck manager for discarding
 var combat_manager: CombatManager = null  # Reference for passing to units
 
+# NOTE: The board supports either 2 enemy columns (spawn + battle) or a single enemy
+# column. Use combat_manager.enemy_columns_count (1 or 2) to decide behavior.
+
 # References to spawn positions
 @onready var column_0_spawn: Marker2D = $Column0Spawn  # Player spawn (bottom)
 @onready var column_1_spawn: Marker2D = $Column1Spawn  # Enemy battle spawn (middle)
@@ -62,29 +65,31 @@ func summon_player_unit(unit_data: BodyCardResource) -> Unit:
 
 func summon_enemy_unit(unit_data: BodyCardResource, column: int = 2, level: int = 1) -> Unit:
 	"""Summon an enemy unit to specified column (default: column 2 = spawn position)"""
-	if column == 2:
+	# Map requested column to actual column based on configured enemy columns
+	var spawn_col = get_spawn_column()
+	var actual_col = column
+	if column == 2 and spawn_col == 1:
+		actual_col = 1
+
+	if actual_col == 2:
 		if column_2_unit != null:
 			print("Lane %d already has an enemy unit in column 2!" % lane_index)
 			return null
-		
 		var unit = _create_unit(unit_data, false, 2, level)
 		column_2_unit = unit
-		
 		# Visual spawn effect - flash the unit
 		if unit and unit.background:
 			var original_color = unit.background.color
-			unit.background.color = Color.YELLOW  # Flash yellow
+			unit.background.color = Color.YELLOW
 			await get_tree().create_timer(0.3).timeout
 			if unit and is_instance_valid(unit) and unit.background:
 				unit.background.color = original_color
-		
 		unit_summoned.emit(unit, false, 2)
 		return unit
-	elif column == 1:
+	elif actual_col == 1:
 		if column_1_unit != null:
 			print("Lane %d already has an enemy unit in column 1!" % lane_index)
 			return null
-		
 		var unit = _create_unit(unit_data, false, 1, level)
 		column_1_unit = unit
 		unit_summoned.emit(unit, false, 1)
@@ -99,13 +104,19 @@ func _create_unit(unit_data: BodyCardResource, is_player: bool, column: int, lev
 	var unit_scene = load("res://scenes/cards/unit_on_board.tscn")
 	var unit: Unit = unit_scene.instantiate()
 	
-	# Position the unit based on column
+	# Position the unit based on column. If the game is configured to use a single
+	# enemy column, a requested column 2 will be placed at column 1 spawn.
 	var spawn_marker: Marker2D = null
-	if column == 0 and column_0_spawn:
+	var spawn_col = get_spawn_column()
+	var actual_col = column
+	if column == 2 and spawn_col == 1:
+		actual_col = 1
+
+	if actual_col == 0 and column_0_spawn:
 		spawn_marker = column_0_spawn
-	elif column == 1 and column_1_spawn:
+	elif actual_col == 1 and column_1_spawn:
 		spawn_marker = column_1_spawn
-	elif column == 2 and column_2_spawn:
+	elif actual_col == 2 and column_2_spawn:
 		spawn_marker = column_2_spawn
 	
 	if spawn_marker:
@@ -162,14 +173,15 @@ func resolve_combat():
 	
 	var combat_happened = false  # Track if units actually fought
 	
-	# Player unit attacks (prioritize Column 1, then Column 2)
+    # Player unit attacks (prioritize Column 1, then Column 2 if present)
 	if column_0_unit:
 		var player_target = null
 		
 		# Find target: Column 1 first, then Column 2 (only if ranged)
+		var spawn_col = get_spawn_column()
 		if column_1_unit:
 			player_target = column_1_unit
-		elif column_2_unit and column_0_unit.attack_range == "ranged":
+		elif spawn_col == 2 and column_2_unit and column_0_unit.attack_range == "ranged":
 			# Only ranged units can attack column 2 (spawn position)
 			player_target = column_2_unit
 		
@@ -179,8 +191,15 @@ func resolve_combat():
 			
 			await column_0_unit.attack_target(player_target)
 			
-			# Check for overflow damage from player attack
-			if player_target and player_target.current_hp < 0:
+			# Only grant overflow if no other living enemy remains in this lane.
+			# Check the column we didn't target — the target itself is already dead/dying.
+			var untargeted_enemy_alive: bool
+			if player_target == column_1_unit:
+				untargeted_enemy_alive = column_2_unit != null and is_instance_valid(column_2_unit) and column_2_unit.current_hp > 0
+			else:
+				# Targeted column 2 (ranged attack)
+				untargeted_enemy_alive = column_1_unit != null and is_instance_valid(column_1_unit) and column_1_unit.current_hp > 0
+			if player_target and player_target.current_hp < 0 and not untargeted_enemy_alive:
 				overflow_to_enemy = abs(player_target.current_hp)
 				print("⚠️ Player overflow: %d damage goes to enemy!" % overflow_to_enemy)
 			
@@ -204,8 +223,26 @@ func resolve_combat():
 			await column_1_unit.play_attack_animation()
 			overflow_to_player = column_1_unit.current_attack
 	
-	# If player unit exists but didn't engage in combat - direct damage to enemy HP
-	if column_0_unit and not combat_happened:
+	# Column 2 ranged unit: fires even from spawn position
+	if column_2_unit and is_instance_valid(column_2_unit) and column_2_unit.current_hp > 0:
+		if column_2_unit.card_data and column_2_unit.card_data.attack_range == "ranged":
+			if column_0_unit and is_instance_valid(column_0_unit) and column_0_unit.current_hp > 0:
+				print("\n=== Lane %d Archer Fire ===" % lane_index)
+				await column_2_unit.attack_target(column_0_unit)
+				if column_0_unit and column_0_unit.current_hp < 0:
+					overflow_to_player += abs(column_0_unit.current_hp)
+					print("⚠️ Archer overflow: %d damage goes to player!" % overflow_to_player)
+				print("=================\n")
+			else:
+				# Undefended lane - archer fires directly at player
+				print("Lane %d: %s fires at player directly for %d damage!" % [lane_index, column_2_unit.card_data.card_name, column_2_unit.current_attack])
+				await column_2_unit.play_attack_animation()
+				overflow_to_player += column_2_unit.current_attack
+	
+	# If player unit exists but didn't engage in combat and no enemies are alive - direct damage to enemy HP
+	var any_enemy_alive = (column_1_unit and is_instance_valid(column_1_unit) and column_1_unit.current_hp > 0) \
+						or (column_2_unit and is_instance_valid(column_2_unit) and column_2_unit.current_hp > 0)
+	if column_0_unit and not combat_happened and not any_enemy_alive:
 		print("Lane %d: %s attacks enemy directly for %d damage!" % [lane_index, column_0_unit.card_data.card_name, column_0_unit.get_total_attack()])
 		await column_0_unit.play_attack_animation()
 		overflow_to_enemy = column_0_unit.get_total_attack()
@@ -214,21 +251,29 @@ func resolve_combat():
 
 func advance_enemies():
 	"""Move enemies forward one column (column 2 -> column 1)"""
-	# Only advance from column 2 to column 1 if column 1 is empty
-	if column_2_unit and not column_1_unit:
-		print("Lane %d: %s advances from spawn to battle position!" % [lane_index, column_2_unit.card_data.card_name])
-		
-		# Move the unit reference
-		column_1_unit = column_2_unit
-		column_2_unit = null
-		
-		# Update unit's column position
-		column_1_unit.set_column(1)
-		
-		# Animate movement to new position
-		if column_1_spawn:
-			var tween = create_tween()
-			tween.tween_property(column_1_unit, "position", column_1_spawn.position, 0.5)
+	# If the game uses a spawn column (2), advance from 2 -> 1. If only a single
+	# enemy column is active (spawn == 1) this is a no-op.
+	if get_spawn_column() == 2:
+		# Only advance from column 2 to column 1 if column 1 is empty
+		if column_2_unit and not column_1_unit:
+			# Ranged units in column 2 never advance — they hold position and fire from spawn
+			if column_2_unit.card_data and column_2_unit.card_data.attack_range == "ranged":
+				print("Lane %d: %s holds position (ranged)" % [lane_index, column_2_unit.card_data.card_name])
+				return
+
+			print("Lane %d: %s advances from spawn to battle position!" % [lane_index, column_2_unit.card_data.card_name])
+
+			# Move the unit reference
+			column_1_unit = column_2_unit
+			column_2_unit = null
+
+			# Update unit's column position
+			column_1_unit.set_column(1)
+
+			# Animate movement to new position
+			if column_1_spawn:
+				var tween = create_tween()
+				tween.tween_property(column_1_unit, "position", column_1_spawn.position, 0.5)
 
 func has_player_unit() -> bool:
 	"""Check if there's a player unit in this lane"""
@@ -240,10 +285,19 @@ func get_player_unit() -> Unit:
 
 func has_enemy_unit() -> bool:
 	"""Check if there's an enemy unit in this lane (any column)"""
-	return column_1_unit != null or column_2_unit != null
+	if get_spawn_column() == 2:
+		return column_1_unit != null or column_2_unit != null
+	else:
+		# Single-column mode: only column 1 is used for enemies
+		return column_1_unit != null
 
 func get_enemy_in_column(column: int) -> Unit:
 	"""Get enemy unit in specified column"""
+	# Map requested column to actual column in single-column mode
+	var spawn_col = get_spawn_column()
+	if column == 2 and spawn_col == 1:
+		column = 1
+
 	if column == 1:
 		return column_1_unit
 	elif column == 2:
@@ -252,22 +306,48 @@ func get_enemy_in_column(column: int) -> Unit:
 
 func is_empty() -> bool:
 	"""Check if lane is completely empty"""
-	return column_0_unit == null and column_1_unit == null and column_2_unit == null
+	if get_spawn_column() == 2:
+		return column_0_unit == null and column_1_unit == null and column_2_unit == null
+	else:
+		return column_0_unit == null and column_1_unit == null
 
 func get_lane_state() -> String:
 	"""Get debug info about this lane"""
 	var col0_info = "Empty"
 	var col1_info = "Empty"
-	var col2_info = "Empty"
-	
+	var col2_info = "(N/A)"
+
 	if column_0_unit:
 		col0_info = column_0_unit.get_unit_info()
 	if column_1_unit:
 		col1_info = column_1_unit.get_unit_info()
-	if column_2_unit:
+	if get_spawn_column() == 2 and column_2_unit:
 		col2_info = column_2_unit.get_unit_info()
-	
-	return "Lane %d | Player(C0): %s | Enemy(C1): %s | Enemy(C2): %s" % [lane_index, col0_info, col1_info, col2_info]
+
+	if get_spawn_column() == 2:
+		return "Lane %d | Player(C0): %s | Enemy(C1): %s | Enemy(C2): %s" % [lane_index, col0_info, col1_info, col2_info]
+	else:
+		return "Lane %d | Player(C0): %s | Enemy(C1): %s" % [lane_index, col0_info, col1_info]
+
+
+func get_spawn_column() -> int:
+	"""Return the configured spawn column (1 or 2). Defaults to 2 when no combat_manager set."""
+	if combat_manager:
+		if combat_manager.enemy_columns_count == 1:
+			return 1
+		else:
+			return 2
+	# Default to 2 if no manager available
+	return 2
+
+
+func has_space_for_spawn() -> bool:
+	"""Return true if the configured spawn column is empty for a new enemy."""
+	var spawn_col = get_spawn_column()
+	if spawn_col == 2:
+		return column_2_unit == null
+	else:
+		return column_1_unit == null
 
 func is_point_in_player_zone(point: Vector2) -> bool:
 	"""Check if a global position is within this lane's player drop zone (column 0)"""
