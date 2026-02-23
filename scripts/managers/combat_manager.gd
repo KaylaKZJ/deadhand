@@ -7,6 +7,7 @@ signal phase_changed(phase: String)
 signal combat_resolved()
 signal game_won()
 signal game_lost()
+signal wave_complete(completed_wave: int, next_wave: int)
 signal level_up(new_level: int, stat_points_gained: int)
 signal xp_gained(amount: int, current_xp: int, xp_for_next_level: int)
 signal stat_allocated(stat_name: String, new_value: int)
@@ -23,6 +24,8 @@ var current_phase: Phase = Phase.DRAW
 var turn_number: int = 0
 var wave_number: int = 1  # Current wave (increases each time enemies are defeated)
 var difficulty_multiplier: float = 1.0  # Scales enemy HP/ATK each wave
+var wave_def_bonus: int = 0  # Flat DEF added to all enemy units each wave (punishes pure ATK stacking)
+@export var enemy_columns_count: int = 2  # 1 = single enemy column, 2 = spawn + battle columns
 
 # Player HP
 var player_hp: int = 20
@@ -75,6 +78,8 @@ func start_game():
 	turn_number = 0
 	wave_number = 1
 	difficulty_multiplier = 1.0
+	wave_def_bonus = 0
+	max_enemy_hp = 40
 	player_hp = max_player_hp
 	enemy_hp = max_enemy_hp
 	
@@ -308,21 +313,31 @@ func check_win_condition() -> bool:
 func _start_next_wave():
 	"""Start the next wave with increased difficulty"""
 	wave_number += 1
-	difficulty_multiplier += 0.15  # +15% difficulty per wave
+	difficulty_multiplier += 0.25  # +25% HP/ATK per wave
+	wave_def_bonus += 2             # +2 flat DEF per wave (punishes pure ATK stacking)
 	enemies_killed_this_wave = 0
 	
-	# Reset enemy HP to max
+	# Notify UI before resetting state
+	wave_complete.emit(wave_number - 1, wave_number)
+	
+	# Scale enemy HP pool up by 50% each wave, then reset to new max
+	max_enemy_hp = roundi(max_enemy_hp * 1.5)
 	enemy_hp = max_enemy_hp
 	
-	# Clear remaining enemies from board
+	# Clear ALL units from the board (player and enemy)
 	for lane in lanes:
-		for slot in [lane.enemy_slot_1, lane.enemy_slot_2]:
-			if slot.current_unit:
-				slot.current_unit.queue_free()
-				slot.current_unit = null
+		for unit in [lane.column_0_unit, lane.column_1_unit, lane.column_2_unit]:
+			if unit and is_instance_valid(unit):
+				unit.queue_free()
+		lane.column_0_unit = null
+		lane.column_1_unit = null
+		lane.column_2_unit = null
+	
+	# Reset the player's deck with fresh shuffled piles and clear their hand
+	deck_manager.reset_decks()
 	
 	print("\n\n🎉 WAVE %d COMPLETE! 🎉" % (wave_number - 1))
-	print("🌊 Starting WAVE %d | Difficulty: %.1fx (Enemies get +%.0f%% HP/ATK)" % [wave_number, difficulty_multiplier, (difficulty_multiplier - 1.0) * 100])
+	print("🌊 Starting WAVE %d | Difficulty: %.1fx (Enemies get +%.0f%% HP/ATK, +%d DEF) | Enemy HP pool: %d" % [wave_number, difficulty_multiplier, (difficulty_multiplier - 1.0) * 100, wave_def_bonus, max_enemy_hp])
 	print("💚 Player HP restored to %d" % max_player_hp)
 	
 	# Optional: Restore some player HP between waves
@@ -459,7 +474,7 @@ func _input(event: InputEvent) -> void:
 		unspent_stat_points = 0
 		print("🔧 Debug: Stats reset")
 
-func _on_unit_died_in_lane(unit: Unit, is_player_unit: bool) -> void:
+func _on_unit_died_in_lane(_unit: Unit, is_player_unit: bool) -> void:
 	"""Award XP when an enemy unit dies"""
 	if not is_player_unit:
 		enemies_killed_this_wave += 1
