@@ -145,7 +145,9 @@ func spawn_enemies(lanes: Array[Lane]):
 		
 		# Spawn the unit with current wave number as level
 		var level = combat_manager.wave_number if combat_manager else 1
-		lane.summon_enemy_unit(unit_card, 2, level)
+		# Use lane.get_spawn_column() so single-column mode places enemies into column 1
+		var spawn_col = lane.get_spawn_column()
+		lane.summon_enemy_unit(unit_card, spawn_col, level)
 		spawned_count += 1
 		_update_spawn_history(unit_card.card_name)
 		
@@ -163,7 +165,7 @@ func choose_spawn_lane(lanes: Array[Lane]) -> Lane:
 		Personality.AGGRESSIVE:
 			# Prefer empty lanes (spread wide)
 			for lane in lanes:
-				if lane.get_enemy_in_column(2) == null:
+				if lane.has_space_for_spawn():
 					var weight = 1.0
 					if lane.is_empty():
 						weight = 3.0  # 3x more likely
@@ -173,7 +175,7 @@ func choose_spawn_lane(lanes: Array[Lane]) -> Lane:
 		Personality.DEFENSIVE:
 			# Prefer lanes with existing enemies (stack up)
 			for lane in lanes:
-				if lane.get_enemy_in_column(2) == null:
+				if lane.has_space_for_spawn():
 					var weight = 1.0
 					if lane.has_enemy_unit():
 						weight = 5.0  # 5x more likely
@@ -185,7 +187,7 @@ func choose_spawn_lane(lanes: Array[Lane]) -> Lane:
 		Personality.MIRROR:
 			# Prefer lanes with player units
 			for lane in lanes:
-				if lane.get_enemy_in_column(2) == null:
+				if lane.has_space_for_spawn():
 					var weight = 1.0
 					if lane.has_player_unit():
 						weight = 4.0  # 4x more likely
@@ -196,7 +198,7 @@ func choose_spawn_lane(lanes: Array[Lane]) -> Lane:
 			# Adapt to HP situation
 			var player_hp = _get_player_hp()
 			for lane in lanes:
-				if lane.get_enemy_in_column(2) == null:
+				if lane.has_space_for_spawn():
 					var weight = 1.0
 					if player_hp > 15:
 						# Push damage - prefer empty lanes
@@ -212,7 +214,7 @@ func choose_spawn_lane(lanes: Array[Lane]) -> Lane:
 		Personality.WAVE, Personality.CHAOTIC:
 			# Random lane selection
 			for lane in lanes:
-				if lane.get_enemy_in_column(2) == null:
+				if lane.has_space_for_spawn():
 					valid_lanes.append(lane)
 					weights.append(1.0)
 	
@@ -246,6 +248,13 @@ func choose_enemy_unit(lane: Lane) -> BodyCardResource:
 	
 	# Apply history penalty
 	weights = _apply_history_penalty(weights)
+	
+	# Wave gate: remove any enemy whose min_wave hasn't been reached yet
+	var current_wave = combat_manager.wave_number if combat_manager else 1
+	for unit_name in weights.keys():
+		var card: BodyCardResource = available_enemy_types[unit_name]
+		if card.min_wave > current_wave:
+			weights.erase(unit_name)
 	
 	# Convert to arrays and select
 	var units = []

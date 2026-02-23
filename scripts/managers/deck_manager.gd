@@ -109,11 +109,12 @@ func _build_equipment_pile():
 
 
 func _build_enemy_pile():
-	"""Build enemy pile: 12 Squires, 2 Knights, 4 Barbarians, 2 Thieves"""
+	"""Build enemy pile: 12 Squires, 2 Knights, 4 Barbarians, 2 Thieves, 3 Archers"""
 	var squire = load("res://resources/cards/enemies/squire.tres") as BodyCardResource
 	var knight = load("res://resources/cards/enemies/knight.tres") as BodyCardResource
 	var barbarian = load("res://resources/cards/enemies/barbarian.tres") as BodyCardResource
 	var thief = load("res://resources/cards/enemies/thief.tres") as BodyCardResource
+	var archer = load("res://resources/cards/enemies/archer.tres") as BodyCardResource
 	
 	# Add 12 Squires
 	for i in 12:
@@ -130,6 +131,10 @@ func _build_enemy_pile():
 	# Add 2 Thieves
 	for i in 2:
 		enemy_draw_pile.append(thief)
+	
+	# Add 3 Archers (available from wave 2 onward - gated in enemy_ai.gd)
+	for i in 3:
+		enemy_draw_pile.append(archer)
 
 func draw_from_pile(pile_type: String) -> Array[CardBase]:
 	"""Draw 2 cards from specified pile (body or equipment)"""
@@ -217,3 +222,20 @@ func get_hand_size() -> int:
 func has_room_in_hand() -> bool:
 	"""Check if there's room in hand for more cards"""
 	return hand.size() < MAX_HAND_SIZE
+
+func reset_decks():
+	"""Clear all piles and hand, then rebuild and shuffle fresh decks for a new wave"""
+	body_draw_pile.clear()
+	body_discard_pile.clear()
+	equipment_draw_pile.clear()
+	equipment_discard_pile.clear()
+	hand.clear()
+	# Note: enemy piles are intentionally NOT reset here - they persist across waves
+	
+	_build_body_pile()
+	_build_equipment_pile()
+	body_draw_pile.shuffle()
+	equipment_draw_pile.shuffle()
+	
+	hand_updated.emit(hand)
+	print("Decks reset: Body pile %d cards, Equipment pile %d cards" % [body_draw_pile.size(), equipment_draw_pile.size()])

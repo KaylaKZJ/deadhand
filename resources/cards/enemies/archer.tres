@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="BodyCardResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_logic/body_card.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+card_name = "Archer"
+card_type = "enemy"
+description = "Fires from the back row. Never advances. Requires a ranged unit to target."
+hp = 5
+attack = 4
+equipment_slots = 0
+slot_types = Array[String]([])
+attack_range = "ranged"
+min_wave = 2
