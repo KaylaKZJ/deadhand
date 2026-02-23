@@ -1,10 +1,10 @@
-[gd_scene load_steps=7 format=3 uid="uid://main_scene"]
+[gd_scene load_steps=7 format=3 uid="uid://byt5scfr08arp"]
 
-[ext_resource type="Script" path="res://scripts/main.gd" id="1"]
-[ext_resource type="Script" path="res://scripts/managers/deck_manager.gd" id="2"]
-[ext_resource type="Script" path="res://scripts/managers/combat_manager.gd" id="3"]
-[ext_resource type="Script" path="res://scripts/managers/enemy_ai.gd" id="4"]
-[ext_resource type="PackedScene" uid="uid://lane_scene_123" path="res://scenes/lane.tscn" id="5"]
+[ext_resource type="Script" uid="uid://d7eq8j0jd8l1" path="res://scripts/main.gd" id="1"]
+[ext_resource type="Script" uid="uid://cm6ukgv51ewf1" path="res://scripts/managers/deck_manager.gd" id="2"]
+[ext_resource type="Script" uid="uid://fqonf1el6ain" path="res://scripts/managers/combat_manager.gd" id="3"]
+[ext_resource type="Script" uid="uid://dlsyvtyc4hk0m" path="res://scripts/managers/enemy_ai.gd" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/lane.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://scenes/ui/stat_panel.tscn" id="6"]
 
 [node name="Main" type="Node2D"]
@@ -20,21 +20,21 @@ script = ExtResource("3")
 script = ExtResource("4")
 
 [node name="Board" type="Node2D" parent="."]
-position = Vector2(640, 360)
+position = Vector2(960, 410)
 
 [node name="Lane1" parent="Board" instance=ExtResource("5")]
-position = Vector2(-320, 0)
+position = Vector2(-440, 0)
 
 [node name="Lane2" parent="Board" instance=ExtResource("5")]
-position = Vector2(-160, 0)
+position = Vector2(-220, 0)
 
 [node name="Lane3" parent="Board" instance=ExtResource("5")]
 
 [node name="Lane4" parent="Board" instance=ExtResource("5")]
-position = Vector2(160, 0)
+position = Vector2(220, 0)
 
 [node name="Lane5" parent="Board" instance=ExtResource("5")]
-position = Vector2(320, 0)
+position = Vector2(440, 0)
 
 [node name="UI" type="CanvasLayer" parent="."]
 
@@ -43,24 +43,24 @@ offset_left = 20.0
 offset_top = 20.0
 offset_right = 200.0
 offset_bottom = 50.0
-text = "Turn: 0"
 theme_override_font_sizes/font_size = 24
+text = "Turn: 0"
 
 [node name="PhaseLabel" type="Label" parent="UI"]
 offset_left = 20.0
 offset_top = 60.0
 offset_right = 200.0
 offset_bottom = 90.0
-text = "Phase: DRAW"
 theme_override_font_sizes/font_size = 20
+text = "Phase: DRAW"
 
 [node name="PlayerHPLabel" type="Label" parent="UI"]
 offset_left = 20.0
 offset_top = 100.0
 offset_right = 200.0
 offset_bottom = 140.0
-text = "HP: 20/20"
 theme_override_font_sizes/font_size = 28
+text = "HP: 20/20"
 
 [node name="EnemyDeckLabel" type="Label" parent="UI"]
 anchors_preset = 1
@@ -71,9 +71,9 @@ offset_top = 20.0
 offset_right = -20.0
 offset_bottom = 100.0
 grow_horizontal = 0
+theme_override_font_sizes/font_size = 18
 text = "Enemies Remaining: 20
 (On Board: 0)"
-theme_override_font_sizes/font_size = 18
 horizontal_alignment = 2
 
 [node name="EnemyHPLabel" type="Label" parent="UI"]
@@ -85,8 +85,8 @@ offset_top = 110.0
 offset_right = -20.0
 offset_bottom = 150.0
 grow_horizontal = 0
-text = "Enemy HP: 20/20"
 theme_override_font_sizes/font_size = 28
+text = "Enemy HP: 20/20"
 horizontal_alignment = 2
 
 [node name="HandContainer" type="HBoxContainer" parent="UI"]
@@ -135,35 +135,37 @@ offset_right = -20.0
 offset_bottom = -20.0
 grow_horizontal = 0
 grow_vertical = 0
+theme_override_font_sizes/font_size = 20
 disabled = true
 text = "END TURN"
-theme_override_font_sizes/font_size = 20
 
 [node name="LevelLabel" type="Label" parent="UI"]
 offset_left = 20.0
 offset_top = 145.0
 offset_right = 160.0
 offset_bottom = 170.0
-text = "Lv.1"
 theme_override_font_sizes/font_size = 18
+text = "Lv.1"
 
 [node name="XPLabel" type="Label" parent="UI"]
 offset_left = 20.0
 offset_top = 172.0
 offset_right = 220.0
 offset_bottom = 195.0
-text = "XP: 0/100"
 theme_override_font_sizes/font_size = 16
+text = "XP: 0/100"
 
 [node name="StatButton" type="Button" parent="UI"]
 offset_left = 20.0
 offset_top = 200.0
 offset_right = 160.0
 offset_bottom = 235.0
-text = "Stats"
 theme_override_font_sizes/font_size = 16
+text = "Stats"
 
 [node name="StatPanel" parent="UI" instance=ExtResource("6")]
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="GameOverPanel" type="Panel" parent="UI"]
 anchors_preset = 15
@@ -173,7 +175,7 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="VBoxContainer" type="VBoxContainer" parent="UI/GameOverPanel"]
-anchors_preset = 8
+layout_mode = 0
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
@@ -188,11 +190,11 @@ alignment = 1
 
 [node name="GameOverLabel" type="Label" parent="UI/GameOverPanel/VBoxContainer"]
 layout_mode = 2
-text = "GAME OVER"
 theme_override_font_sizes/font_size = 48
+text = "GAME OVER"
 horizontal_alignment = 1
 
 [node name="RestartButton" type="Button" parent="UI/GameOverPanel/VBoxContainer"]
 layout_mode = 2
-text = "RESTART"
 theme_override_font_sizes/font_size = 32
+text = "RESTART"
